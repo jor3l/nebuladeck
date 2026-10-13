@@ -1,7 +1,11 @@
 #include <Arduino.h>
 #include "display.h"
+#include "proto.h"
+#include "ui.h"
 
 static Display lcd;
+static Ui ui(lcd);
+static Proto proto(ui);
 
 void setup() {
   Serial.begin(115200);
@@ -9,22 +13,34 @@ void setup() {
   lcd.setRotation(0);  // portrait, 320x480
   lcd.setBrightness(200);
   lcd.fillScreen(TFT_BLACK);
-  lcd.setTextColor(TFT_WHITE);
-  lcd.setTextSize(2);
-  lcd.setCursor(10, 10);
-  lcd.printf("NebulaDeck\n%dx%d", lcd.width(), lcd.height());
-  Serial.printf("boot ok %dx%d psram=%u\n", lcd.width(), lcd.height(), ESP.getPsramSize());
+  if (!ui.begin()) {
+    lcd.setTextColor(TFT_RED);
+    lcd.drawString("framebuffer alloc failed", 10, 10);
+    for (;;) delay(1000);
+  }
 }
 
 void loop() {
-  static uint32_t last = 0;
+  uint32_t now = millis();
+  proto.poll(now);
+
+  // Taps: act on the press edge.
+  static bool down = false;
   int32_t x, y;
-  if (lcd.getTouch(&x, &y)) {
-    lcd.fillCircle(x, y, 6, TFT_CYAN);
-    Serial.printf("touch %d,%d\n", x, y);
+  bool touching = lcd.getTouch(&x, &y);
+  if (touching && !down) {
+    int c = ui.hitAsk(x, y);
+    if (c >= 0) {
+      proto.sendTap(ui.askId, c, ui.opts[c]);
+      ui.asking = false;
+      ui.status = ST_WORKING;
+    }
   }
-  if (millis() - last > 1000) {
-    last = millis();
-    Serial.printf("alive %lu\n", millis() / 1000);
+  down = touching;
+
+  static uint32_t lastFrame = 0;
+  if (now - lastFrame >= 40) {
+    lastFrame = now;
+    ui.drawFrame(proto.connected(now), now);
   }
 }

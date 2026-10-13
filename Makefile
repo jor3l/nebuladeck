@@ -3,7 +3,7 @@
 PORT ?= $(shell pio device list 2>/dev/null | awk '/^\/dev\//{p=$$0} /VID:PID=303A/{print p; exit}')
 FW   := firmware
 
-.PHONY: build flash monitor run clean port
+.PHONY: build flash monitor run clean port demo
 
 build:
 	cd $(FW) && pio run -e sc01plus
@@ -25,3 +25,8 @@ run: flash monitor
 
 clean:
 	cd $(FW) && pio run -e sc01plus -t clean
+
+# Cycles the screen through every state (needs the board running the firmware).
+demo:
+	@test -n "$(PORT)" || { echo "No Espressif device found."; exit 1; }
+	$$(head -1 $$(which pio) | sed 's/^#!//') tools/demo.py $(PORT)
