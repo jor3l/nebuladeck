@@ -234,7 +234,7 @@
       <p><small>Or merge <a href="#" data-dl="hooks.json">hooks.json</a> into <code>~/.claude/settings.json</code> yourself.</small></p>
     </div>
 
-    <div class="card" role="tabpanel" data-panel="codex" hidden>
+    <div class="card" role="tabpanel" data-panel="codex" data-agent="Codex" hidden>
       <h2>Codex CLI</h2>
       <p>Add the instructions to your global <code>~/.codex/AGENTS.md</code> (or to <code>AGENTS.md</code> in one repo):</p>
       <div class="copy"><button data-copy>Copy</button><pre data-tpl>mkdir -p ~/.codex && cat >> ~/.codex/AGENTS.md <<'EOF'
@@ -246,7 +246,7 @@ EOF</pre></div>
 network_access = true</pre></div>
     </div>
 
-    <div class="card" role="tabpanel" data-panel="gemini" hidden>
+    <div class="card" role="tabpanel" data-panel="gemini" data-agent="Gemini" hidden>
       <h2>Gemini CLI</h2>
       <p>Add the instructions to your global <code>~/.gemini/GEMINI.md</code> (or to <code>GEMINI.md</code> in one repo):</p>
       <div class="copy"><button data-copy>Copy</button><pre data-tpl>mkdir -p ~/.gemini && cat >> ~/.gemini/GEMINI.md <<'EOF'
@@ -256,7 +256,7 @@ EOF</pre></div>
       <p><small>If you run Gemini CLI with its sandbox on, make sure it can reach your local network.</small></p>
     </div>
 
-    <div class="card" role="tabpanel" data-panel="cursor" hidden>
+    <div class="card" role="tabpanel" data-panel="cursor" data-agent="Cursor" hidden>
       <h2>Cursor</h2>
       <p>For every project: <strong>Cursor Settings → Rules → User Rules</strong>, and paste:</p>
       <div class="copy"><button data-copy>Copy</button><pre class="wrap" data-tpl>{{INSTR}}</pre></div>
@@ -271,7 +271,7 @@ EOF</pre></div>
       <p><small>The agent runs the curl commands in Cursor's terminal; approve them, or allow <code>curl</code> in your auto-run settings.</small></p>
     </div>
 
-    <div class="card" role="tabpanel" data-panel="copilot" hidden>
+    <div class="card" role="tabpanel" data-panel="copilot" data-agent="Copilot" hidden>
       <h2>GitHub Copilot (agent mode)</h2>
       <p>Add the instructions to the repo's <code>.github/copilot-instructions.md</code>, from the repo folder:</p>
       <div class="copy"><button data-copy>Copy</button><pre data-tpl>mkdir -p .github && cat >> .github/copilot-instructions.md <<'EOF'
@@ -318,11 +318,11 @@ EOF</pre></div>
   const DEFAULT_HOST = 'nebuladeck.local';
   const base = new URL('skill/', location.href).href;
   // Instructions shared by every agent except Claude Code (which gets the skill).
-  const instructions = (h) => `## NebulaDeck status screen
+  const instructions = (h, agent) => `## NebulaDeck status screen
 
-A NebulaDeck touch screen on my desk shows what you are doing, so I can look away while you work. It is on my local network at http://${h}/api and takes JSON over HTTP. Call it with \`curl -4 -s -m 3\`; if a call fails, carry on without it.
+A NebulaDeck touch screen on my desk shows what you are doing, so I can look away while you work. It is on my local network at http://${h}/api and takes JSON over HTTP. Call it with \`curl -4 -s -m 3\`; if a call fails, carry on without it.${agent ? ` Include "agent":"${agent}" in every JSON body so the screen shows your name and logo.` : ''}
 
-- Starting a multi-step task: curl -4 -s -m 3 -H 'Content-Type: application/json' -d '{"status":"working","title":"<what you are doing>","project":"<folder name>"}' http://${h}/api/state
+- Starting a multi-step task: curl -4 -s -m 3 -H 'Content-Type: application/json' -d '{${agent ? `"agent":"${agent}",` : ''}"status":"working","title":"<what you are doing>","project":"<folder name>"}' http://${h}/api/state
 - When the phase changes: the same state call with a new title, optionally "progress": 0.0-1.0. For a milestone or problem: POST {"text":"<one line>","level":"info|warn|error"} to http://${h}/api/msg
 - Whenever you ask me a question with clear options (a decision, an approval, yes/no; during a task or not), also put it on the screen: POST {"id":"<short id>","prompt":"<question>","options":["<A>","<B>"],"timeout":120} to http://${h}/api/ask, then poll curl -4 -s -m 3 "http://${h}/api/answer?id=<short id>" every second until it is not "pending". "answered:<option>" is my choice; "cancelled" or no reply means ask me in the chat instead. At most 4 short options. Ask on the screen first and only fall back to the chat. Open-ended questions stay in the chat only.
 - When finished, always (even on failure): POST {"summary":"<one sentence>"} to http://${h}/api/done
@@ -338,8 +338,12 @@ Titles under 60 characters, messages under 90, plain text, no secrets. A handful
 
   function render() {
     const sed = host === DEFAULT_HOST ? '' : ` | sed 's/nebuladeck\\.local/${host}/g'`;
-    const vars = { HOST: host, BASE: base, SED: sed, INSTR: instructions(host) };
-    for (const [el, t] of tpls) el.textContent = t.replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k]);
+    for (const [el, t] of tpls) {
+      // Each tab's instructions carry its agent's name (data-agent), which picks the logo on screen.
+      const agent = el.closest('[data-panel]')?.dataset.agent ?? '';
+      const vars = { HOST: host, BASE: base, SED: sed, INSTR: instructions(host, agent) };
+      el.textContent = t.replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k]);
+    }
     $('testCmd').textContent = `curl -4 http://${host}/api/info`;
   }
   function setHost(v, persist = true) {

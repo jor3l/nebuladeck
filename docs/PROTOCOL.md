@@ -31,7 +31,10 @@ idle screen. In setup with a saved network, **Cancel** on screen goes back to it
 and replies are JSON. Send `Content-Type: application/json`. Every reply has `ok`, and errors also
 have `error`.
 
-Any POST below (except `bye`) starts or extends the agent session. With no request for 30 minutes
+Any POST below (except `bye`) starts or extends the agent session. Any body may include
+`agent` (≤32 chars, e.g. `"Claude"`, `"Codex"`, `"Gemini"`, `"Cursor"`, `"Copilot"`): the screen shows that
+name, with the agent's logo when it recognises it (Claude/Anthropic, Codex/OpenAI/ChatGPT/GPT,
+Gemini/Google, Cursor, Copilot) and a green dot otherwise. `/api/hook` defaults it to Claude. With no request for 30 minutes
 the screen returns to the idle nebula ("Agent not connected"), and a new session starts clean.
 
 | Method + path | Body | Effect |

@@ -1,8 +1,95 @@
 #include "ui.h"
 #include <vector>
 #include "version.h"
+#include "icons.h"
+
+// Soft glow around (cx, cy): light falling off smoothly from the centre to rOut, with the
+// core slightly darkened so a logo on top stays readable. strength 0-1. No edges, no ring.
+static void drawGlow(LGFX_Sprite& fb, int cx, int cy, float rOut, uint8_t r, uint8_t g, uint8_t b, float strength) {
+  static constexpr float CORE = 24;
+  auto* buf = (uint16_t*)fb.getBuffer();
+  int w = fb.width(), h = fb.height(), R = (int)rOut + 1;
+  for (int y = max(0, cy - R); y < min(h, cy + R); y++) {
+    for (int x = max(0, cx - R); x < min(w, cx + R); x++) {
+      float d = sqrtf((float)((x - cx) * (x - cx) + (y - cy) * (y - cy)));
+      if (d >= rOut) continue;
+      float glow = (1 - d / rOut) * (1 - d / rOut) * strength;
+      float dark = d < CORE ? 0.3f * (1 - (d / CORE) * (d / CORE)) : 0;
+      uint16_t c = __builtin_bswap16(buf[y * w + x]);
+      float br = (c >> 8) & 0xF8, bg = (c >> 3) & 0xFC, bb = (c << 3) & 0xF8;
+      br += (r - br) * glow; bg += (g - bg) * glow; bb += (b - bb) * glow;
+      br += (10 - br) * dark; bg += (12 - bg) * dark; bb += (28 - bb) * dark;
+      buf[y * w + x] = __builtin_bswap16(lgfx::color565((int)br, (int)bg, (int)bb));
+    }
+  }
+}
+
+// Light glowing in from all four screen edges (the presence screen's "breathing").
+static void drawEdgeGlow(LGFX_Sprite& fb, uint8_t r, uint8_t g, uint8_t b, float strength) {
+  static constexpr int E = 44;  // band width
+  static uint8_t fall[E];       // falloff by distance from the edge, 0-255
+  if (!fall[0]) for (int d = 0; d < E; d++) fall[d] = 255 * (1 - d / (float)E) * (1 - d / (float)E);
+  auto* buf = (uint16_t*)fb.getBuffer();
+  int w = fb.width(), h = fb.height(), s = (int)(strength * 256);
+  auto blend = [&](int x, int y, int d) {
+    int a = fall[d] * s >> 8;
+    uint16_t c = __builtin_bswap16(buf[y * w + x]);
+    int br = (c >> 8) & 0xF8, bg = (c >> 3) & 0xFC, bb = (c << 3) & 0xF8;
+    buf[y * w + x] = __builtin_bswap16(lgfx::color565(br + (r - br) * a / 255, bg + (g - bg) * a / 255, bb + (b - bb) * a / 255));
+  };
+  for (int y = 0; y < h; y++) {
+    int dy = min(y, h - 1 - y);
+    if (dy < E) {
+      for (int x = 0; x < w; x++) blend(x, y, min(dy, min(x, w - 1 - x)));  // top/bottom bands
+    } else {
+      for (int x = 0; x < E; x++) { blend(x, y, x); blend(w - 1 - x, y, x); }  // sides
+    }
+  }
+}
+
+// Logo for a known agent name ("Claude", "Codex", "Gemini CLI"...), or nullptr.
+// Cached: it's called every frame and only recomputed when the name changes.
+static const AgentIcon* iconFor(const String& agent) {
+  static String last;
+  static const AgentIcon* hit = nullptr;
+  if (agent == last) return hit;
+  last = agent;
+  hit = nullptr;
+  String a = agent;
+  a.toLowerCase();
+  for (const AgentIcon& ic : AGENT_ICONS) {
+    const char* p = ic.names;
+    while (*p) {
+      const char* e = strchr(p, '|');
+      int len = e ? e - p : strlen(p);
+      if (a.indexOf(String(p).substring(0, len)) >= 0) return hit = &ic;
+      p += len + (e ? 1 : 0);
+    }
+  }
+  return nullptr;
+}
+
+// Tints an n x n alpha mask onto the framebuffer, centred on (cx, cy).
+static void drawMask(LGFX_Sprite& fb, const uint8_t* m, int n, int cx, int cy, uint8_t r, uint8_t g, uint8_t b) {
+  auto* buf = (uint16_t*)fb.getBuffer();
+  int x0 = cx - n / 2, y0 = cy - n / 2, w = fb.width(), h = fb.height();
+  for (int y = 0; y < n; y++) {
+    int py = y0 + y;
+    if (py < 0 || py >= h) continue;
+    for (int x = 0; x < n; x++) {
+      int a = m[y * n + x], px = x0 + x;
+      if (!a || px < 0 || px >= w) continue;
+      uint16_t c = __builtin_bswap16(buf[py * w + px]);  // the sprite stores RGB565 byte-swapped
+      int br = (c >> 8) & 0xF8, bg = (c >> 3) & 0xFC, bb = (c << 3) & 0xF8;
+      br += (r - br) * a / 255; bg += (g - bg) * a / 255; bb += (b - bb) * a / 255;
+      buf[py * w + px] = __builtin_bswap16(lgfx::color565(br, bg, bb));
+    }
+  }
+}
 
 static const int W = 320, H = 480;
+// Live/presence accent, matched to the nebula's violet.
+static const uint8_t PURPLE_R = 160, PURPLE_G = 100, PURPLE_B = 255;
 
 static uint16_t statusColor(LovyanGFX& g, uint8_t s) {
   switch (s) {
@@ -148,11 +235,20 @@ void Ui::drawIdle(uint32_t now) {
 void Ui::drawPresence(uint32_t now) {
   float t = now / 1000.0f;
   nebulaHeader(fb_, nebula_, now);
-  uint16_t dot = attn ? fb_.color565(255, 190, 60) : fb_.color565(70, 220, 140);
+  uint16_t dot = attn ? fb_.color565(255, 190, 60) : fb_.color565(PURPLE_R, PURPLE_G, PURPLE_B);
   float pulse = 0.5f + 0.5f * sinf(t * (attn ? 4.5f : 1.6f));
   int cx = W / 2, cy = H / 2 - 36;
-  fb_.drawCircle(cx, cy, 22 + (int)(pulse * 10), fb_.color565(attn ? 120 : 30, attn ? 90 : 110, attn ? 30 : 80));
-  fb_.fillCircle(cx, cy, 9 + (int)(pulse * 3), dot);
+  // The screen edges breathe: purple, or amber when the agent needs you (the nebula turns amber too).
+  drawEdgeGlow(fb_, attn ? 255 : PURPLE_R, attn ? 170 : PURPLE_G, attn ? 50 : PURPLE_B,
+               attn ? 0.45f + 0.4f * pulse : 0.25f + 0.3f * pulse);
+  // Known agents: their logo (on a softly darkened spot so it reads on any nebula). Others: a dot in a ring.
+  if (const AgentIcon* ic = iconFor(agent)) {
+    drawGlow(fb_, cx, cy, 30, 0, 0, 0, 0);
+    drawMask(fb_, ic->big, ICON_BIG, cx, cy, ic->r, ic->g, ic->b);
+  } else {
+    fb_.drawCircle(cx, cy, 22 + (int)(pulse * 10), attn ? fb_.color565(120, 90, 30) : fb_.color565(70, 40, 130));
+    fb_.fillCircle(cx, cy, 9 + (int)(pulse * 3), dot);
+  }
 
   fb_.setFont(&fonts::FreeSansBold12pt7b);
   fb_.setTextColor(fb_.color565(240, 243, 255));
@@ -249,7 +345,8 @@ void Ui::drawStatus(uint32_t now) {
 
   // Header: live dot + project.
   int pr = 5 + (int)(2.0f * (0.5f + 0.5f * sinf(t * 3.0f)));
-  fb_.fillCircle(24, 26, pr, fb_.color565(70, 220, 140));
+  if (const AgentIcon* ic = iconFor(agent)) drawMask(fb_, ic->small, ICON_SMALL, 24, 26, ic->r, ic->g, ic->b);
+  else fb_.fillCircle(24, 26, pr, fb_.color565(PURPLE_R, PURPLE_G, PURPLE_B));
   fb_.setFont(&fonts::FreeSansBold12pt7b);
   fb_.setTextColor(fb_.color565(230, 235, 255));
   fb_.drawString(project.length() ? project : "NebulaDeck", 44, 12);
@@ -506,6 +603,10 @@ void Ui::drawUpdating() {
 void Ui::drawFrame(bool connected, uint32_t now) {
   for (int i = nmsg - 1; i >= 0; i--)
     if (msgs[i].ttl && now - msgs[i].at > msgs[i].ttl * 1000UL) nmsg = i;  // oldest expire first
+  // Nebula colours follow the state: greyscale with no agent, amber when the agent needs you.
+  bool presenceScreen = connected && !net.setup && !completed && !asking && status == ST_IDLE;
+  nebula_.mood(net.setup ? Nebula::M_NORMAL : !connected ? Nebula::M_IDLE
+               : presenceScreen && attn ? Nebula::M_ATTN : Nebula::M_NORMAL, now / 1000.0f);
   if (net.setup) drawSetup(now);
   else if (!connected) drawIdle(now);
   else if (completed && !asking) drawDone(now);

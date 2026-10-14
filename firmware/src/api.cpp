@@ -98,7 +98,7 @@ void Api::begin() {
     else if (ev == "Stop") { in["text"] = "Ready"; in["end_turn"] = true; }
     else if (ev == "SessionEnd") t = "bye";
     else return sendError(400, "unknown event");
-    if (server.hasArg("agent")) in["agent"] = server.arg("agent");
+    in["agent"] = server.hasArg("agent") ? server.arg("agent") : "Claude";  // the hook format is Claude Code's
     out["ok"] = true;
     apply(t, in, out, millis());
     send(200, out);
@@ -174,6 +174,8 @@ int Api::apply(const char* t, JsonDocument& doc, JsonDocument& out, uint32_t now
   }
   if (!connected(now)) ui_.reset();  // a new session starts clean
   lastSeen_ = now;
+  // Any command may say which agent sent it (shown by name and logo).
+  if (doc["agent"].is<const char*>() && strlen(doc["agent"]) <= 32) ui_.agent = doc["agent"].as<const char*>();
 
   if (!strcmp(t, "state")) {
     ui_.completed = false;
@@ -213,7 +215,6 @@ int Api::apply(const char* t, JsonDocument& doc, JsonDocument& out, uint32_t now
     ui_.tokOut = doc["tokens_out"].as<uint32_t>();
     ui_.durationS = doc["duration"].is<int>() ? doc["duration"].as<int>() : -1;
   } else if (!strcmp(t, "presence")) {
-    if (doc["agent"].is<const char*>()) ui_.agent = doc["agent"].as<const char*>();
     ui_.presence = doc["text"] | "";
     ui_.attn = doc["attn"] | false;
     if (doc["new_turn"] | false) { ui_.completed = false; ui_.status = ST_IDLE; }

@@ -26,7 +26,8 @@ are for real tasks.
 ## When to use it
 
 1. **Start of a task** (more than a couple of steps):
-   `nd state '{"status":"working","title":"<what you are doing>","project":"<folder name>"}'`
+   `nd state '{"agent":"Claude","status":"working","title":"<what you are doing>","project":"<folder name>"}'`
+   (`"agent"` picks the name and logo on the screen; include it in your first call of a task.)
 2. **Progress**: send `state` again with a new title or `"progress":0.4` when the phase changes, not on every file.
 3. **Milestones / problems**: `nd msg '{"text":"<one line>","level":"info|warn|error"}'`
 4. **Any question for the user with clear options**: a decision, an approval, a yes/no, "A or B?".

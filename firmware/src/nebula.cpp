@@ -73,22 +73,64 @@ bool Nebula::begin() {
   a_ = (uint8_t*)heap_caps_malloc(W * H, MALLOC_CAP_SPIRAM);
   b_ = (uint8_t*)heap_caps_malloc(W * H, MALLOC_CAP_SPIRAM);
   if (!a_ || !b_ || !bake(a_, 3, 4, 1.6f, 1) || !bake(b_, 5, 7, 1.2f, 7)) return false;
-  // Deep space -> violet -> magenta -> cyan highlights, mid-tones stretched.
-  static const struct { float at; uint8_t r, g, b; } stops[] = {
+  // Palettes, mid-tones stretched. Normal: deep space -> violet -> magenta -> cyan highlights.
+  // Attention: the same shape in warm amber. Idle: the normal palette's luminance, cool grey.
+  struct Stop { float at; uint8_t r, g, b; };
+  static const Stop normal[] = {
       {0.00f, 2, 3, 14},    {0.30f, 10, 8, 40},   {0.50f, 38, 14, 86},
       {0.70f, 112, 30, 140}, {0.86f, 226, 64, 160}, {1.00f, 120, 220, 255}};
+  static const Stop attn[] = {
+      {0.00f, 6, 3, 6},     {0.30f, 34, 10, 12},  {0.50f, 92, 30, 14},
+      {0.70f, 168, 72, 22},  {0.86f, 250, 150, 50}, {1.00f, 255, 232, 170}};
+  auto build = [](const Stop* stops, uint8_t (*out)[3]) {
+    for (int i = 0; i < 256; i++) {
+      float v = (i / 255.0f - 0.26f) / (0.88f - 0.26f);
+      v = v < 0 ? 0 : v > 1 ? 1 : v;
+      int k = 0;
+      while (k < 4 && v > stops[k + 1].at) k++;
+      float f = (v - stops[k].at) / (stops[k + 1].at - stops[k].at);
+      out[i][0] = stops[k].r + (stops[k + 1].r - stops[k].r) * f;
+      out[i][1] = stops[k].g + (stops[k + 1].g - stops[k].g) * f;
+      out[i][2] = stops[k].b + (stops[k + 1].b - stops[k].b) * f;
+    }
+  };
+  build(normal, pal_[M_NORMAL]);
+  build(attn, pal_[M_ATTN]);
   for (int i = 0; i < 256; i++) {
-    float v = (i / 255.0f - 0.26f) / (0.88f - 0.26f);
-    v = v < 0 ? 0 : v > 1 ? 1 : v;
-    int k = 0;
-    while (k < 4 && v > stops[k + 1].at) k++;
-    float f = (v - stops[k].at) / (stops[k + 1].at - stops[k].at);
-    auto mix = [&](uint8_t a, uint8_t b) { return (int)(a + (b - a) * f); };
-    uint16_t c = lgfx::color565(mix(stops[k].r, stops[k + 1].r), mix(stops[k].g, stops[k + 1].g),
-                                mix(stops[k].b, stops[k + 1].b));
-    lut_[i] = __builtin_bswap16(c);
+    const uint8_t* c = pal_[M_NORMAL][i];
+    int y = (c[0] * 30 + c[1] * 59 + c[2] * 11) / 100;
+    y = y * 85 / 100 + 6;  // a little dimmer, lifted blacks
+    pal_[M_IDLE][i][0] = y; pal_[M_IDLE][i][1] = y; pal_[M_IDLE][i][2] = min(255, y + 8);
   }
+  memcpy(from_, pal_[M_NORMAL], sizeof from_);
+  updateLut(0);
   return true;
+}
+
+void Nebula::mood(uint8_t m, float t) {
+  if (m == mood_ || m >= M_COUNT) return;
+  // Start the fade from whatever is on screen now (possibly mid-fade).
+  for (int i = 0; i < 256; i++) {
+    uint16_t c = __builtin_bswap16(lut_[i]);
+    from_[i][0] = (c >> 8) & 0xF8; from_[i][1] = (c >> 3) & 0xFC; from_[i][2] = (c << 3) & 0xF8;
+  }
+  mood_ = m;
+  moodT0_ = t;
+  fading_ = true;
+}
+
+void Nebula::updateLut(float t) {
+  static constexpr float FADE = 1.0f;
+  float k = (t - moodT0_) / FADE;
+  if (k >= 1) { k = 1; fading_ = false; }
+  if (k < 0) k = 0;
+  const uint8_t (*to)[3] = pal_[mood_];
+  for (int i = 0; i < 256; i++) {
+    int r = from_[i][0] + (to[i][0] - from_[i][0]) * k;
+    int g = from_[i][1] + (to[i][1] - from_[i][1]) * k;
+    int b = from_[i][2] + (to[i][2] - from_[i][2]) * k;
+    lut_[i] = __builtin_bswap16(lgfx::color565(r, g, b));
+  }
 }
 
 void Nebula::ripple(int x, int y, float t) {
@@ -116,6 +158,7 @@ void Nebula::draw(lgfx::LGFX_Sprite& dst, float t) {
   int ax = wrap((int)(t * 6.0f), W), ay = wrap((int)(t * 3.0f), H);
   int bx = wrap((int)(-t * 10.0f), W), by = wrap((int)(t * 5.0f), H);
   int breathe = (int)(10.0f * sinf(t * 0.25f));
+  if (fading_) updateLut(t);
 
   for (int y = 0; y < H; y++) {
     int lo = W, hi = -1;  // boost_ span touched on this row
