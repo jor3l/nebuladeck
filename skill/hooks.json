@@ -40,6 +40,16 @@
         ]
       }
     ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "j=$(cat); c=$(printf '%s' \"$j\" | grep -o '\"cwd\" *: *\"[^\"]*\"' | head -n 1 | sed 's/^[^:]*: *\"//; s/\"$//'); p=${CLAUDE_PROJECT_DIR:-$c}; curl -4 -s -m 2 -G -X POST --data-urlencode \"event=SubagentStop\" --data-urlencode \"project=${p##*/}\" \"http://${NEBULADECK_HOST:-nebuladeck.local}/api/hook\" >/dev/null 2>&1 &"
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [

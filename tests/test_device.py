@@ -175,6 +175,28 @@ class Device(unittest.TestCase):
         hook("Notification", agent="E2E-C", project="e2e")
         self.assertTrue(agents()["E2E-C"]["attn"])
 
+    def test_launched_agents_keep_the_session_busy(self):
+        # Regression: a session that launched an agent read "Waiting for you" while it worked.
+        hook("UserPromptSubmit", agent="E2E-C", project="e2e")
+        hook("PreToolUse", agent="E2E-C", project="e2e", tool="Agent")
+        hook("PreToolUse", agent="E2E-C", project="e2e", tool="Agent")
+        hook("Stop", agent="E2E-C", project="e2e")  # the session's own turn ends
+        c = agents()["E2E-C"]
+        self.assertEqual((c["subagents"], c["line"], c["label"]), (2, "2 agents working...", "ACTIVE"))
+        hook("Notification", agent="E2E-C", project="e2e", kind="idle")  # the idle reminder
+        self.assertEqual(agents()["E2E-C"]["line"], "2 agents working...")
+        hook("SubagentStop", agent="E2E-C", project="e2e")
+        self.assertEqual(agents()["E2E-C"]["line"], "An agent is working...")
+        hook("SubagentStop", agent="E2E-C", project="e2e")
+        c = agents()["E2E-C"]
+        self.assertEqual((c["subagents"], c["line"], c["label"]), (0, "Ready", "READY"))
+        hook("Notification", agent="E2E-C", project="e2e", kind="idle")
+        self.assertEqual(agents()["E2E-C"]["line"], "Waiting for you")
+        # A permission prompt still needs the user, agents running or not.
+        hook("PreToolUse", agent="E2E-C", project="e2e", tool="Agent")
+        hook("Notification", agent="E2E-C", project="e2e")
+        self.assertEqual(agents()["E2E-C"]["label"], "NEEDS YOU")
+
     def test_tool_steps_feed_a_running_task(self):
         post("state", {"agent": "E2E-C", "project": "e2e", "status": "working", "title": "Task"})
         for _ in range(3):

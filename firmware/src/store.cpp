@@ -34,6 +34,7 @@ void Store::save(const Ui& ui, uint32_t now) {
     o["progress"] = a.progress;
     o["task_age"] = now - a.taskStart;
     o["presence"] = a.presence;
+    o["subagents"] = a.subagents;
     o["attn"] = a.attn;
     o["completed"] = a.completed;
     o["summary"] = a.summary;
@@ -94,6 +95,7 @@ void Store::load(Ui& ui, uint32_t now, uint32_t leaseMs) {
     a.progress = o["progress"] | -1.0f;
     a.taskStart = now - (uint32_t)(o["task_age"] | 0);
     a.presence = o["presence"] | "";
+    a.subagents = o["subagents"] | 0;
     a.attn = o["attn"] | false;
     a.completed = o["completed"] | false;
     a.summary = o["summary"] | "";

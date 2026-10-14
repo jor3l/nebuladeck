@@ -142,23 +142,35 @@ void Api::begin() {
   server.on("/api/hook", HTTP_POST, [this] {
     requests_++;
     String ev = server.arg("event");
+    String tool = server.arg("tool");
     JsonDocument in, out;
     const char* t = "presence";
-    if (ev == "SessionStart") { in["text"] = "Ready"; in["new_turn"] = true; }
-    else if (ev == "UserPromptSubmit") { in["text"] = "Thinking..."; in["new_turn"] = true; }
-    else if (ev == "PreToolUse") in["text"] = toolText(server.arg("tool"));
-    // Claude Code notifies both for permission prompts (attn) and, a minute after a turn
-    // ends, "waiting for your input" (kind=idle): calm, not an alarm.
-    else if (ev == "Notification" && server.arg("kind") == "idle") in["text"] = "Waiting for you";
-    else if (ev == "Notification") { in["text"] = "Needs you"; in["attn"] = true; }
-    else if (ev == "Stop") { in["text"] = "Ready"; in["end_turn"] = true; }
-    else if (ev == "SessionEnd") t = "bye";
-    else return sendError(400, "unknown event");
     in["agent"] = server.hasArg("agent") ? server.arg("agent") : "Claude";  // the hook format is Claude Code's
     if (server.arg("project").length()) in["project"] = server.arg("project");
+    // Launched agents keep running after the session's own turn ends (Stop, then the idle
+    // reminder): while any do, the session reads as working, not "Ready" / "Waiting for you".
+    Agent* known = resolve(in, millis(), false);
+    uint8_t subs = known ? known->subagents : 0;
+    String working = subs > 1 ? String(subs) + " agents working..." : String("An agent is working...");
+    if (ev == "SessionStart") { in["text"] = "Ready"; in["new_turn"] = true; }
+    else if (ev == "UserPromptSubmit") { in["text"] = "Thinking..."; in["new_turn"] = true; }
+    else if (ev == "PreToolUse") in["text"] = toolText(tool);
+    else if (ev == "SubagentStop") in["text"] = subs > 1 ? (subs - 1 > 1 ? String(subs - 1) + " agents working..." : String("An agent is working...")) : String("Ready");
+    // Claude Code notifies both for permission prompts (attn) and, a minute after a turn
+    // ends, "waiting for your input" (kind=idle): calm, not an alarm.
+    else if (ev == "Notification" && server.arg("kind") == "idle") in["text"] = subs ? working : String("Waiting for you");
+    else if (ev == "Notification") { in["text"] = "Needs you"; in["attn"] = true; }
+    else if (ev == "Stop") { in["text"] = subs ? working : String("Ready"); in["end_turn"] = true; }
+    else if (ev == "SessionEnd") t = "bye";
+    else return sendError(400, "unknown event");
     out["ok"] = true;
     uint32_t now = millis();
     apply(t, in, out, now);
+    if (Agent* a = resolve(in, now, false)) {
+      if (ev == "PreToolUse" && (tool == "Agent" || tool == "Task") && a->subagents < 9) a->subagents++;
+      else if (ev == "SubagentStop" && a->subagents) a->subagents--;
+      else if (ev == "SessionStart") a->subagents = 0;  // a fresh session (SessionEnd drops the agent)
+    }
     // During a task, tool steps also go into its activity list (without the "...").
     Agent* a = ev == "PreToolUse" ? resolve(in, now, false) : nullptr;
     if (a && !a->completed && a->status != ST_IDLE) {
@@ -233,6 +245,7 @@ void Api::info() {
     o["asking"] = a.asking;
     o["restored"] = a.restored;
     o["attn"] = a.attn;
+    o["subagents"] = a.subagents;
     o["completed"] = a.completed;
     o["activity"] = a.nmsg;
     if (a.nmsg) o["last"] = a.msgs[0].text;

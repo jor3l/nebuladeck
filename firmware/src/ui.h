@@ -56,6 +56,7 @@ struct Agent {
   int askChoice = -1;
   // Presence (no task): secondary line on the nebula.
   String presence;
+  uint8_t subagents = 0;  // agents it launched that are still running (hooks: Agent/Task tool, SubagentStop)
   bool attn = false;
   // Finished task: summary and token card.
   bool completed = false;

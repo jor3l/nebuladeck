@@ -113,8 +113,14 @@ is not sent. For `PreToolUse`, `sed` pulls out only `tool_name` and sends it as 
 | `UserPromptSubmit` | "Thinking...", clears a finished screen |
 | `PreToolUse` | By tool: "Running a command...", "Reading...", "Editing...", "Searching...", "Browsing...", "Delegating...", "Planning...", else "Working..." |
 | `Notification` | "Needs you" (amber) for permission prompts; with `kind=idle` (Claude Code's "waiting for your input" reminder) a calm "Waiting for you" |
+| `SubagentStop` | One launched agent finished (see below) |
 | `Stop` | "Ready", closes a task card left open |
 | `SessionEnd` | `bye` |
+
+Launched agents: a `PreToolUse` for the `Agent` (or `Task`) tool counts one more running agent
+for that session, `SubagentStop` one fewer. While any run, the session's own `Stop` and the idle
+reminder read "An agent is working..." / "N agents working..." (ACTIVE) instead of "Ready" /
+"Waiting for you"; a permission prompt still shows "Needs you". `SessionStart` resets the count.
 
 An explicit task (`state working`) takes over the screen while it runs; during a task,
 `PreToolUse` steps also appear in its activity list as one dim line ("Editing x3"), under

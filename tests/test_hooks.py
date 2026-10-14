@@ -55,8 +55,8 @@ class Hooks(unittest.TestCase):
             time.sleep(0.05)
         return Fake.seen[0] if Fake.seen else None, took
 
-    def test_all_six_events_are_installed(self):
-        self.assertEqual(set(HOOKS), {"SessionStart", "UserPromptSubmit", "PreToolUse", "Notification", "Stop", "SessionEnd"})
+    def test_all_events_are_installed(self):
+        self.assertEqual(set(HOOKS), {"SessionStart", "UserPromptSubmit", "PreToolUse", "Notification", "SubagentStop", "Stop", "SessionEnd"})
 
     def test_each_event_sends_its_name_and_project(self):
         for ev in HOOKS:
