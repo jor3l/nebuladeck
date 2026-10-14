@@ -80,6 +80,12 @@
     background: var(--card2); border: 1px solid var(--line); border-radius: 8px; padding: 4px 8px; cursor: pointer; }
   .copy pre { padding-right: 64px; }
   pre.wrap { white-space: pre-wrap; overflow-wrap: anywhere; }
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 12px; }
+  .tabs button { font: inherit; font-size: 14px; color: var(--dim); cursor: pointer;
+    background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 7px 14px; }
+  .tabs button[aria-selected="true"] { color: var(--text); border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+  #host { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  #host[aria-invalid="true"] { border-color: var(--err); }
   @media (max-width: 600px) { .choices { grid-template-columns: 1fr; } h1 { font-size: 28px; } }
 </style>
 </head>
@@ -101,7 +107,7 @@
     </button>
     <button class="choice" id="pickAgent" aria-pressed="false">
       <strong>Set up your agent</strong>
-      <span>Teach Claude Code (or any agent) to use the screen.</span>
+      <span>Teach your coding agent to use the screen.</span>
     </button>
   </div>
 
@@ -144,9 +150,9 @@
     <div class="card" id="doneCard" hidden>
       <h2>3 · You're online</h2>
       <p>Your NebulaDeck is on <strong id="doneSsid"></strong> at <code id="doneHost">nebuladeck.local</code> (<code id="doneIp"></code>). In a few seconds it switches to “Agent not connected”.</p>
-      <p>Check it from your computer with <code>curl -4 http://nebuladeck.local/api/info</code>, then
-        <a href="#" id="toAgent">set up your agent</a>.</p>
-      <p><small>If <code>nebuladeck.local</code> doesn't resolve on your computer, use the IP instead: <code id="useCmd">export NEBULADECK_HOST=IP</code>. To change network later, hold the screen for 5 seconds.</small></p>
+      <p>Next, <a href="#" id="toAgent">set up your agent</a>. If <code>nebuladeck.local</code> doesn't work on your computer,
+        <a href="#" id="useIp">set up your agent with the IP instead</a>.</p>
+      <p><small>To change network later, tap the logo on the screen → Forget WiFi.</small></p>
     </div>
   </section>
 
@@ -193,29 +199,85 @@
   <!-- Agent setup -->
   <section id="agent" hidden>
     <div class="card">
-      <h2>Claude Code · the skill</h2>
-      <p>The skill tells Claude when to update the screen and how to ask you questions on it. It only uses <code>curl</code>, so there is nothing else to install. Run this in a terminal:</p>
-      <div class="copy"><button data-copy="installSkill">Copy</button><pre id="installSkill"></pre></div>
-      <p><small>Or download <a href="skill/SKILL.md" download>SKILL.md</a> into <code>~/.claude/skills/nebuladeck/</code>. Start a new Claude Code session afterwards.</small></p>
+      <h2>Device address</h2>
+      <p>Where your agents reach the screen. Keep <code>nebuladeck.local</code>, or use the IP from the screen's logo menu if <code>.local</code> names don't work on your network. Everything below updates as you type.</p>
+      <input type="text" id="host" value="nebuladeck.local" spellcheck="false" autocomplete="off" autocapitalize="off" aria-describedby="hostNote">
+      <p class="dim" id="hostNote">Test it: <code id="testCmd"></code></p>
     </div>
 
-    <div class="card">
-      <h2>Claude Code · live status while chatting (optional)</h2>
-      <p>Hooks make the screen show “Claude connected” with “Thinking…”, “Running a command…”, “Needs you” and “Ready” in every session, even without a task. Each hook is a background <code>curl</code> that sends only the event name, never your prompts or files.</p>
-      <p>Easiest: with the skill installed, ask Claude:</p>
-      <div class="copy"><button data-copy="hooksPrompt">Copy</button><pre class="wrap" id="hooksPrompt">Install the NebulaDeck hooks from the nebuladeck skill's hooks.json into my ~/.claude/settings.json.</pre></div>
-      <p><small>Or merge <a href="skill/hooks.json" download>hooks.json</a> into <code>~/.claude/settings.json</code> yourself.</small></p>
+    <div class="tabs" role="tablist" aria-label="Agent">
+      <button role="tab" data-tab="claude">Claude Code</button>
+      <button role="tab" data-tab="codex">Codex CLI</button>
+      <button role="tab" data-tab="gemini">Gemini CLI</button>
+      <button role="tab" data-tab="cursor">Cursor</button>
+      <button role="tab" data-tab="copilot">GitHub Copilot</button>
+      <button role="tab" data-tab="other">Other</button>
     </div>
 
-    <div class="card">
-      <h2>Other agents</h2>
-      <p>Anything that can run <code>curl</code> can drive the screen. Paste this into your agent's instructions (AGENTS.md, rules, system prompt):</p>
-      <div class="copy"><button data-copy="agentsSnippet">Copy</button><pre class="wrap" id="agentsSnippet">A NebulaDeck status screen is on my local network at http://nebuladeck.local/api (JSON over HTTP, use curl -4 -m 3, ignore failures; -4 avoids a 5 s IPv6 lookup).
-- Starting a multi-step task: POST /api/state {"status":"working","title":"...","project":"..."}
-- Milestones: POST /api/msg {"text":"...","level":"info|warn|error"}
-- Need a decision: POST /api/ask {"id":"q1","prompt":"...","options":["Yes","No"],"timeout":120}, then poll GET /api/answer?id=q1 every second until it is not "pending" ("answered:&lt;option&gt;" or "cancelled"; then ask in chat)
-- Finished (always, even on failure): POST /api/done {"summary":"..."}
-Keep titles under 60 characters, plain text, no secrets.</pre></div>
+    <div class="card" role="tabpanel" data-panel="claude" hidden>
+      <h2>Claude Code · skill</h2>
+      <p>The skill tells Claude when to update the screen and how to ask you questions on it. Run this in a terminal, then start a new Claude Code session:</p>
+      <div class="copy"><button data-copy>Copy</button><pre data-tpl>mkdir -p ~/.claude/skills/nebuladeck && cd ~/.claude/skills/nebuladeck && \
+  curl -fsSL {{BASE}}SKILL.md{{SED}} > SKILL.md && \
+  curl -fsSL {{BASE}}hooks.json{{SED}} > hooks.json</pre></div>
+      <p><small>Or download <a href="#" data-dl="SKILL.md">SKILL.md</a> into <code>~/.claude/skills/nebuladeck/</code>.</small></p>
+      <h2 style="margin-top:22px">Optional · live status while chatting</h2>
+      <p>Hooks show “Claude connected” with “Thinking…”, “Running a command…”, “Needs you” and “Ready” in every session. Each one is a background <code>curl</code> that sends only the event name. With the skill installed, ask Claude:</p>
+      <div class="copy"><button data-copy>Copy</button><pre class="wrap">Install the NebulaDeck hooks from the nebuladeck skill's hooks.json into my ~/.claude/settings.json.</pre></div>
+      <p><small>Or merge <a href="#" data-dl="hooks.json">hooks.json</a> into <code>~/.claude/settings.json</code> yourself.</small></p>
+    </div>
+
+    <div class="card" role="tabpanel" data-panel="codex" hidden>
+      <h2>Codex CLI</h2>
+      <p>Add the instructions to your global <code>~/.codex/AGENTS.md</code> (or to <code>AGENTS.md</code> in one repo):</p>
+      <div class="copy"><button data-copy>Copy</button><pre data-tpl>mkdir -p ~/.codex && cat >> ~/.codex/AGENTS.md <<'EOF'
+
+{{INSTR}}
+EOF</pre></div>
+      <p><small>Codex runs commands in a sandbox with networking off by default, so the curl calls fail silently. Allow it in <code>~/.codex/config.toml</code>:</small></p>
+      <div class="copy"><button data-copy>Copy</button><pre>[sandbox_workspace_write]
+network_access = true</pre></div>
+    </div>
+
+    <div class="card" role="tabpanel" data-panel="gemini" hidden>
+      <h2>Gemini CLI</h2>
+      <p>Add the instructions to your global <code>~/.gemini/GEMINI.md</code> (or to <code>GEMINI.md</code> in one repo):</p>
+      <div class="copy"><button data-copy>Copy</button><pre data-tpl>mkdir -p ~/.gemini && cat >> ~/.gemini/GEMINI.md <<'EOF'
+
+{{INSTR}}
+EOF</pre></div>
+      <p><small>If you run Gemini CLI with its sandbox on, make sure it can reach your local network.</small></p>
+    </div>
+
+    <div class="card" role="tabpanel" data-panel="cursor" hidden>
+      <h2>Cursor</h2>
+      <p>For every project: <strong>Cursor Settings → Rules → User Rules</strong>, and paste:</p>
+      <div class="copy"><button data-copy>Copy</button><pre class="wrap" data-tpl>{{INSTR}}</pre></div>
+      <p>Or for one project, from its folder:</p>
+      <div class="copy"><button data-copy>Copy</button><pre data-tpl>mkdir -p .cursor/rules && cat > .cursor/rules/nebuladeck.mdc <<'EOF'
+---
+description: NebulaDeck desk status screen
+alwaysApply: true
+---
+{{INSTR}}
+EOF</pre></div>
+      <p><small>The agent runs the curl commands in Cursor's terminal; approve them, or allow <code>curl</code> in your auto-run settings.</small></p>
+    </div>
+
+    <div class="card" role="tabpanel" data-panel="copilot" hidden>
+      <h2>GitHub Copilot (agent mode)</h2>
+      <p>Add the instructions to the repo's <code>.github/copilot-instructions.md</code>, from the repo folder:</p>
+      <div class="copy"><button data-copy>Copy</button><pre data-tpl>mkdir -p .github && cat >> .github/copilot-instructions.md <<'EOF'
+
+{{INSTR}}
+EOF</pre></div>
+      <p><small>Copilot runs the curl commands in the editor's terminal, so agent mode needs permission to run them.</small></p>
+    </div>
+
+    <div class="card" role="tabpanel" data-panel="other" hidden>
+      <h2>Any other agent</h2>
+      <p>Anything that can run <code>curl</code> can drive the screen. Paste this into your agent's instructions (rules file, system prompt, custom instructions):</p>
+      <div class="copy"><button data-copy>Copy</button><pre class="wrap" data-tpl>{{INSTR}}</pre></div>
       <p><small>Full API: <a href="https://github.com/jor3l/nebuladeck/blob/main/docs/PROTOCOL.md">docs/PROTOCOL.md</a>.</small></p>
     </div>
   </section>
@@ -245,12 +307,69 @@ Keep titles under 60 characters, plain text, no secrets.</pre></div>
   $('toAgent').onclick = (e) => { e.preventDefault(); pick('agent'); scrollTo(0, 0); };
   if (location.hash === '#agent') pick('agent');
 
-  // Agent setup: the skill is served next to this page.
+  // --- Agent setup: every command is generated from the device address ---
+  const DEFAULT_HOST = 'nebuladeck.local';
   const base = new URL('skill/', location.href).href;
-  $('installSkill').textContent =
-    `mkdir -p ~/.claude/skills/nebuladeck && cd ~/.claude/skills/nebuladeck && \\\n  curl -fsSLO ${base}SKILL.md && curl -fsSLO ${base}hooks.json`;
+  // Instructions shared by every agent except Claude Code (which gets the skill).
+  const instructions = (h) => `## NebulaDeck status screen
+
+A NebulaDeck touch screen on my desk shows what you are doing, so I can look away while you work. It is on my local network at http://${h}/api and takes JSON over HTTP. Call it with \`curl -4 -s -m 3\`; if a call fails, carry on without it.
+
+- Starting a multi-step task: curl -4 -s -m 3 -H 'Content-Type: application/json' -d '{"status":"working","title":"<what you are doing>","project":"<folder name>"}' http://${h}/api/state
+- When the phase changes: the same state call with a new title, optionally "progress": 0.0-1.0. For a milestone or problem: POST {"text":"<one line>","level":"info|warn|error"} to http://${h}/api/msg
+- When you need my decision: POST {"id":"<short id>","prompt":"<question>","options":["<A>","<B>"],"timeout":120} to http://${h}/api/ask, then poll curl -4 -s -m 3 "http://${h}/api/answer?id=<short id>" every second until it is not "pending". "answered:<option>" is my choice; "cancelled" or no reply means ask me in the chat instead. At most 4 short options.
+- When finished, always (even on failure): POST {"summary":"<one sentence>"} to http://${h}/api/done
+
+Titles under 60 characters, messages under 90, plain text, no secrets. A handful of updates per task, not every step.`;
+
+  const hostInput = $('host');
+  const tpls = [...document.querySelectorAll('[data-tpl]')].map((el) => [el, el.textContent]);
+  // Hostname or IPv4/IPv6 (with optional port) only: these strings end up in shell commands.
+  const cleanHost = (v) => v.trim().replace(/^https?:\/\//i, '').replace(/\/.*$/, '');
+  const validHost = (h) => /^[A-Za-z0-9.-]+(:\d{1,5})?$/.test(h) || /^\[[0-9A-Fa-f:]+\](:\d{1,5})?$/.test(h);
+  let host = DEFAULT_HOST;
+
+  function render() {
+    const sed = host === DEFAULT_HOST ? '' : ` | sed 's/nebuladeck\\.local/${host}/g'`;
+    const vars = { HOST: host, BASE: base, SED: sed, INSTR: instructions(host) };
+    for (const [el, t] of tpls) el.textContent = t.replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k]);
+    $('testCmd').textContent = `curl -4 http://${host}/api/info`;
+  }
+  function setHost(v, persist = true) {
+    const h = cleanHost(v);
+    const ok = validHost(h);
+    hostInput.setAttribute('aria-invalid', !ok);
+    if (!ok) return;
+    host = h;
+    if (persist) { try { localStorage.setItem('nebuladeck.host', h); } catch {} }
+    render();
+  }
+  hostInput.oninput = () => setHost(hostInput.value);
+  try { const saved = localStorage.getItem('nebuladeck.host'); if (saved && validHost(saved)) hostInput.value = saved; } catch {}
+  setHost(hostInput.value, false);
+
+  // Tabs, remembered per browser.
+  function tab(name) {
+    document.querySelectorAll('[data-tab]').forEach((b) => b.setAttribute('aria-selected', b.dataset.tab === name));
+    document.querySelectorAll('[data-panel]').forEach((p) => (p.hidden = p.dataset.panel !== name));
+    try { localStorage.setItem('nebuladeck.tab', name); } catch {}
+  }
+  document.querySelectorAll('[data-tab]').forEach((b) => b.onclick = () => tab(b.dataset.tab));
+  let firstTab = 'claude';
+  try { firstTab = localStorage.getItem('nebuladeck.tab') || firstTab; } catch {}
+  tab(document.querySelector(`[data-tab="${firstTab}"]`) ? firstTab : 'claude');
+
+  // Downloads carry the chosen address.
+  document.querySelectorAll('[data-dl]').forEach((a) => a.onclick = async (e) => {
+    e.preventDefault();
+    const text = (await (await fetch(base + a.dataset.dl)).text()).replaceAll(DEFAULT_HOST, host);
+    const url = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
+    Object.assign(document.createElement('a'), { href: url, download: a.dataset.dl }).click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
+
   document.querySelectorAll('[data-copy]').forEach((b) => b.onclick = async () => {
-    try { await navigator.clipboard.writeText($(b.dataset.copy).textContent); b.textContent = 'Copied'; }
+    try { await navigator.clipboard.writeText(b.nextElementSibling.textContent); b.textContent = 'Copied'; }
     catch { b.textContent = 'Select & copy'; }
     setTimeout(() => (b.textContent = 'Copy'), 1500);
   });
@@ -340,7 +459,7 @@ Keep titles under 60 characters, plain text, no secrets.</pre></div>
         $('doneSsid').textContent = chosen ?? s.saved ?? '';
         $('doneHost').textContent = s.host;
         $('doneIp').textContent = s.ip;
-        $('useCmd').textContent = `export NEBULADECK_HOST=${s.ip}`;
+        $('useIp').onclick = (e) => { e.preventDefault(); hostInput.value = s.ip; setHost(s.ip); pick('agent'); scrollTo(0, 0); };
         break;
     }
   }
