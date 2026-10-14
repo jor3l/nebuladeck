@@ -38,6 +38,7 @@ struct Agent {
   bool used = false;
   String name, project;
   uint32_t lastSeen = 0;  // millis() of its last request; the lease runs from here
+  bool restored = false;  // loaded after a restart and not heard from since
   // Task.
   String title;
   uint8_t status = ST_IDLE;
@@ -79,11 +80,13 @@ class Ui {
   Agent agents[MAXAGENTS];
   int focus = -1;   // with several agents: the one opened from its card, -1 = the card list
   int scroll = 0;   // card list scroll offset, px
+  int swipeIdx = -1, swipeDx = 0;  // a card being swiped right to dismiss it
   int count() const;
   // The agent the detail screens show: the only one, or the focused one. nullptr = card list.
   Agent* view();
   const Agent* view() const;
   bool anyNeedsYou() const;
+  bool dirty = false;  // agents changed since the last save to flash (see Store)
   NetInfo net;
   float hold = 0;  // long-press progress towards WiFi setup, 0-1
   uint32_t frameMs = 0, frameMaxMs = 0;  // last and slowest frame render time (debug, /api/info)

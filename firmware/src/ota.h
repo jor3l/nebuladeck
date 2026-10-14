@@ -1,5 +1,6 @@
 #pragma once
 #include <Arduino.h>
+#include <functional>
 #include "ui.h"
 
 // Over-the-air updates from the latest GitHub release. Checks in a background task
@@ -12,6 +13,7 @@ class Ota {
   void requestInstall() { want_ = ui_.update.length() > 0; }
   void skip();
   void checkNow() { nextCheck_ = millis(); }
+  std::function<void()> onInstall;  // runs before the download (the device reboots after)
 
  private:
   static void checkTask(void* self);

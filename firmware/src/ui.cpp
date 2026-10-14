@@ -258,7 +258,9 @@ void Ui::header(uint32_t now) {
   fb_.setFont(&fonts::FreeSansBold9pt7b);
   fb_.setTextSize(size);
   int w = fb_.textWidth("N E B U L A D E C K");
-  int cx = (int)(W / 2 + (16 + w / 2 - W / 2) * e), cy = (int)(44 + (21 - 44) * e);
+  // On the card list the logo sits centred between the top edge and the divider (y 70).
+  int y0 = !net.setup && count() > 1 && !v ? 35 : 44;
+  int cx = (int)(W / 2 + (16 + w / 2 - W / 2) * e), cy = (int)(y0 + (21 - y0) * e);
   fb_.setTextColor(fb_.color565(150, 160, 210));
   centerText(fb_, "N E B U L A D E C K", cx, cy);
   fb_.setTextSize(1);
@@ -697,6 +699,7 @@ static bool busy(const Agent& a) {
 
 // Hook-only agents have no task status: their status line says whether they're busy.
 const char* Ui::cardLabel(const Agent& a) {
+  if (a.restored) return "RECONNECTING";
   return a.asking ? "QUESTION" : a.attn ? "NEEDS YOU" : a.completed ? "DONE"
          : a.status != ST_IDLE ? statusLabel(a.status) : busy(a) ? "ACTIVE" : "READY";
 }
@@ -738,12 +741,14 @@ void Ui::drawAgents(uint32_t now) {
   for (int k = 0; k < nc; k++) {
     const Agent& a = agents[idx[k]];
     int x = 12, w = W - 24, y = LIST_Y + k * (CARD_H + CARD_GAP) - scroll;
+    if (idx[k] == swipeIdx) x += swipeDx;  // follows the finger while swiped
     if (y > H || y + CARD_H < LIST_Y) continue;
     bool hot = a.needsYou();
     float pulse = 0.5f + 0.5f * sinf(t * 4.5f);
     // A card that needs you turns amber and pulses; the rest stay dark violet.
-    uint16_t bg = hot ? fb_.color565(46 + (int)(pulse * 26), 28 + (int)(pulse * 12), 8) : fb_.color565(14, 16, 38);
-    uint16_t edge = hot ? fb_.color565(255, 170 + (int)(pulse * 40), 50) : fb_.color565(48, 40, 100);
+    uint16_t bg = hot ? fb_.color565(46 + (int)(pulse * 26), 28 + (int)(pulse * 12), 8)
+                  : a.restored ? fb_.color565(10, 11, 24) : fb_.color565(14, 16, 38);
+    uint16_t edge = hot ? fb_.color565(255, 170 + (int)(pulse * 40), 50) : a.restored ? fb_.color565(32, 30, 60) : fb_.color565(48, 40, 100);
     fb_.fillRoundRect(x, y, w, CARD_H, 16, bg);
     fb_.drawRoundRect(x, y, w, CARD_H, 16, edge);
     if (hot) fb_.drawRoundRect(x + 1, y + 1, w - 2, CARD_H - 2, 15, edge);
@@ -753,7 +758,7 @@ void Ui::drawAgents(uint32_t now) {
     else fb_.fillCircle(x + 24, y + 24, 6, fb_.color565(PURPLE_R, PURPLE_G, PURPLE_B));
     bool active = a.status == ST_IDLE && busy(a);
     const char* label = cardLabel(a);
-    uint16_t lc = hot ? fb_.color565(255, 200, 90) : a.completed ? fb_.color565(70, 220, 140)
+    uint16_t lc = a.restored ? fb_.color565(110, 115, 150) : hot ? fb_.color565(255, 200, 90) : a.completed ? fb_.color565(70, 220, 140)
                   : active ? statusColor(fb_, ST_WORKING) : statusColor(fb_, a.status);
     fb_.setFont(&fonts::FreeSansBold9pt7b);
     int lw = fb_.textWidth(label);

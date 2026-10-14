@@ -27,6 +27,8 @@ class Fake(http.server.BaseHTTPRequestHandler):
 
 
 class Hooks(unittest.TestCase):
+    _keep_project = False  # tests run inside Claude Code may inherit CLAUDE_PROJECT_DIR
+
     @classmethod
     def setUpClass(cls):
         cls.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Fake)
@@ -41,8 +43,9 @@ class Hooks(unittest.TestCase):
         Fake.seen.clear()
         cmd = HOOKS[event][0]["hooks"][0]["command"]
         t0 = time.time()
+        env = {k: v for k, v in os.environ.items() if k != "CLAUDE_PROJECT_DIR" or self._keep_project}
         r = subprocess.run(["sh", "-c", cmd], input=json.dumps(payload), text=True, capture_output=True,
-                           env={**os.environ, "NEBULADECK_HOST": host or self.host}, timeout=10)
+                           env={**env, "NEBULADECK_HOST": host or self.host}, timeout=10)
         took = time.time() - t0
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(r.stdout, "", "hooks must not print")
@@ -62,6 +65,23 @@ class Hooks(unittest.TestCase):
             self.assertEqual(req["path"], "/api/hook")
             self.assertEqual(req["query"]["event"], ev)
             self.assertEqual(req["query"]["project"], "my project & co")  # folder name, URL-encoded intact
+
+    def test_project_is_the_session_root_not_the_current_folder(self):
+        # Regression: a session that cd'd into a subfolder showed up as a second agent.
+        old = os.environ.pop("CLAUDE_PROJECT_DIR", None)
+        try:
+            os.environ["CLAUDE_PROJECT_DIR"] = "/Users/someone/Development/nebuladeck"
+            type(self)._keep_project = True
+            req, _ = self.run_hook("Stop", {"cwd": "/Users/someone/Development/nebuladeck/firmware"})
+            type(self)._keep_project = False
+            self.assertEqual(req["query"]["project"], "nebuladeck")
+            del os.environ["CLAUDE_PROJECT_DIR"]
+            req, _ = self.run_hook("Stop", {"cwd": "/Users/someone/Development/other"})
+            self.assertEqual(req["query"]["project"], "other")  # no project dir: the cwd's folder
+        finally:
+            os.environ.pop("CLAUDE_PROJECT_DIR", None)
+            if old is not None:
+                os.environ["CLAUDE_PROJECT_DIR"] = old
 
     def test_tool_name_and_nested_traps(self):
         # tool_input may nest keys called cwd/tool_name: the top-level ones (first) must win.

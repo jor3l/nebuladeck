@@ -3,6 +3,7 @@
 #include "display.h"
 #include "net.h"
 #include "ota.h"
+#include "store.h"
 #include "ui.h"
 
 static Display lcd;
@@ -10,6 +11,7 @@ static Ui ui(lcd);
 static Net net(ui.net);
 static Api api(ui);
 static Ota ota(ui);
+static Store store;
 
 static const uint32_t HOLD_MS = 5000;   // long-press on a nebula screen -> WiFi setup
 static const uint32_t SLEEP_MS = 180000;  // no touch and no agent requests for this long -> screen off
@@ -27,11 +29,19 @@ void setup() {
     lcd.drawString("framebuffer alloc failed", 10, 10);
     for (;;) delay(1000);
   }
+  store.begin();
+  store.load(ui, millis(), Api::LEASE_MS);  // agents from before the restart
   net.begin();
   api.begin();
   ota.begin();
   api.onForgetWifi = [] { net.forget(); };
   api.onUpdate = [] { ota.requestInstall(); };
+  ota.onInstall = [] { store.save(ui, millis()); };  // agents survive the update's reboot
+  api.onRestart = [] {
+    store.save(ui, millis());
+    delay(200);  // let the reply out
+    ESP.restart();
+  };
 }
 
 void loop() {
@@ -39,6 +49,7 @@ void loop() {
   net.poll(now);
   api.poll(now);
   ota.poll(now, ui.net.online);
+  store.poll(ui, now);
 
   // Taps: act on the press edge.
   static bool down = false;
@@ -90,15 +101,29 @@ void loop() {
   bool list = !ui.net.setup && conn && !ui.view();
   static bool listPress = false;
   static int32_t ly0, lscroll0, lmove;
-  if (touching && !down && list && !ui.info && y >= 80) { listPress = true; ly0 = y; lscroll0 = ui.scroll; lmove = 0; }
+  if (touching && !down && list && !ui.info && y >= 80) {
+    listPress = true; ly0 = y; lscroll0 = ui.scroll; lmove = 0;
+    x0List = x; y0List = y;  // before the drag check below, which measures from here
+  }
+  static int8_t gesture = 0;  // 0 undecided, 1 scrolling, 2 swiping a card right
   if (listPress && touching) {
-    lmove = max(lmove, (int32_t)abs(y - ly0));
-    ui.scroll = max(0, min((int)(lscroll0 - (y - ly0)), ui.maxScroll()));
+    int32_t dx = x - x0List, dy = y - ly0;
+    lmove = max(lmove, max((int32_t)abs(dx), (int32_t)abs(dy)));
+    if (!gesture && lmove > 12) {
+      int c = ui.hitCard(x0List, y0List);
+      gesture = dx > 0 && abs(dx) > abs(dy) && c >= 0 ? 2 : 1;
+      if (gesture == 2) ui.swipeIdx = c;
+    }
+    if (gesture == 1) ui.scroll = max(0, min((int)(lscroll0 - dy), ui.maxScroll()));
+    if (gesture == 2) ui.swipeDx = max(0, (int)dx);
   } else if (listPress) {  // released
     listPress = false;
-    if (lmove < 12) { int c = ui.hitCard(x0List, y0List); if (c >= 0) { ui.focus = c; ui.info = false; } }
+    if (gesture == 2 && ui.swipeDx > 110 && ui.swipeIdx >= 0) api.dismiss(ui.agents[ui.swipeIdx]);
+    else if (!gesture) { int c = ui.hitCard(x0List, y0List); if (c >= 0) { ui.focus = c; ui.info = false; } }
+    ui.swipeIdx = -1;
+    ui.swipeDx = 0;
+    gesture = 0;
   }
-  if (listPress && !down) { x0List = x; y0List = y; }
   if (touching && !down && ui.hitBack(x, y)) ui.focus = -1;
 
   if (touching && ui.onNebula(conn) && !ui.info && !pressed && !list && !listPress) {

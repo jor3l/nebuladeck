@@ -116,6 +116,13 @@ void Api::begin() {
     delay(100);  // let the reply out before the radio drops
     if (onForgetWifi) onForgetWifi();
   });
+  // Restart the device (state is saved first and restored afterwards; used by the tests).
+  server.on("/api/restart", HTTP_POST, [this] {
+    JsonDocument doc;
+    doc["ok"] = true;
+    send(200, doc);
+    if (onRestart) onRestart();
+  });
   server.on("/api/update", HTTP_POST, [this] {
     JsonDocument doc;
     doc["ok"] = ui_.update.length() > 0;
@@ -176,7 +183,7 @@ void Api::poll(uint32_t now) {
     if (!a.used) continue;
     // Signed: requests handled inside poll(now) stamp lastSeen with a slightly later
     // millis() than `now`; unsigned, that wrapped to ~49 days and dropped the agent.
-    if ((int32_t)(now - a.lastSeen) >= (int32_t)LEASE_MS) { cancelAsk(a, "lease"); note("drop " + a.name); a.clear(); continue; }
+    if ((int32_t)(now - a.lastSeen) >= (int32_t)LEASE_MS) { cancelAsk(a, "lease"); note("drop " + a.name); a.clear(); ui_.dirty = true; continue; }
     if (a.askState == ASK_PENDING && a.askDeadline && (int32_t)(now - a.askDeadline) >= 0) cancelAsk(a, "deadline");
   }
 }
@@ -222,6 +229,7 @@ void Api::info() {
     o["status"] = a.status == ST_WORKING ? "working" : a.status == ST_WAITING ? "waiting" : a.status == ST_DONE ? "done"
                   : a.status == ST_ERROR ? "error" : "idle";
     o["asking"] = a.asking;
+    o["restored"] = a.restored;
     o["attn"] = a.attn;
     o["completed"] = a.completed;
     o["activity"] = a.nmsg;
@@ -270,6 +278,7 @@ int Api::apply(const char* t, JsonDocument& doc, JsonDocument& out, uint32_t now
   for (const char* k : KNOWN) known |= !strcmp(t, k);
   if (!known) return 404;
   lastRequest = now;
+  ui_.dirty = true;
 
   if (!strcmp(t, "bye")) {  // this agent leaves; the others stay
     if (Agent* a = resolve(doc, now, false)) { cancelAsk(*a, "bye"); note("bye " + a->name); a->clear(); }
@@ -288,6 +297,7 @@ int Api::apply(const char* t, JsonDocument& doc, JsonDocument& out, uint32_t now
   Agent* ap = resolve(doc, now, true);
   Agent& a = *ap;
   a.lastSeen = now;
+  a.restored = false;  // heard from again
 
   if (!strcmp(t, "state")) {
     // A task starts when we leave the presence/done screens (or the first state of a session).
@@ -344,9 +354,17 @@ void Api::note(const String& s) {
 }
 
 void Api::cancelAsk(Agent& a, const char* why) {
-  if (a.askState == ASK_PENDING) { a.askState = ASK_CANCELLED; note("ask " + a.askId + " cancelled: " + why); }
+  if (a.askState == ASK_PENDING) { a.askState = ASK_CANCELLED; note("ask " + a.askId + " cancelled: " + why); ui_.dirty = true; }
   if (a.asking && a.status == ST_WAITING) a.status = a.beforeAsk;
   a.asking = false;
+}
+
+void Api::dismiss(Agent& a) {
+  if (!a.used) return;
+  cancelAsk(a, "dismissed");
+  note("dismissed " + a.name);
+  a.clear();
+  ui_.dirty = true;
 }
 
 void Api::answer(Agent& a, int choice) {
@@ -354,6 +372,7 @@ void Api::answer(Agent& a, int choice) {
   a.askState = ASK_ANSWERED;
   a.askChoice = choice;
   a.askLabel = a.opts[choice];
+  ui_.dirty = true;
   note("ask " + a.askId + " answered: " + a.askLabel);
   a.asking = false;
   if (a.status == ST_WAITING) a.status = a.beforeAsk;

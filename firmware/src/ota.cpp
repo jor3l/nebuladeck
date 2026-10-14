@@ -108,6 +108,7 @@ void Ota::skip() {
 // Blocks until done; reboots on success.
 void Ota::install() {
   if (!url_.length()) return;
+  if (onInstall) onInstall();
   ui_.updatePrompt = false;
   ui_.updateError = "";
   ui_.updatePct = 0;

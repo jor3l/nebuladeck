@@ -208,6 +208,35 @@ class Device(unittest.TestCase):
         post("state", {"agent": "E2E-B", "project": "e2e", "status": "working", "title": "T"})
         self.assertEqual(agents()["E2E-B"]["label"], "WORKING")
 
+    def test_state_survives_a_restart(self):
+        post("state", {"agent": "E2E-A", "project": "e2e", "status": "working", "title": "Before the restart", "progress": 0.5})
+        post("msg", {"agent": "E2E-A", "project": "e2e", "text": "A milestone to keep"})
+        post("ask", {"agent": "E2E-B", "project": "e2e", "id": "e2e-qr", "prompt": "Still here?", "options": ["Yes"], "timeout": 120})
+        self.assertEqual(post("restart")[0], 200)
+        time.sleep(3)
+        for _ in range(40):  # back on the network
+            try:
+                info = call("/info")[1]
+                break
+            except OSError:
+                time.sleep(1)
+        self.assertLess(info["uptime_s"], 60, "the device didn't restart")
+        type(self).uptime = info["uptime_s"]  # expected, not a crash
+        a = agents()
+        self.assertEqual(a["E2E-A"]["line"], "Before the restart")
+        self.assertEqual(a["E2E-A"]["status"], "working")
+        self.assertEqual(a["E2E-A"]["last"], "A milestone to keep")
+        self.assertTrue(a["E2E-B"]["asking"])
+        self.assertEqual(call("/answer?id=e2e-qr")[1], "pending")  # the waiting agent can still get an answer
+        # Restored cards wait for their agent (and expire if it never comes back)...
+        self.assertTrue(a["E2E-A"]["restored"])
+        self.assertEqual(a["E2E-A"]["label"], "RECONNECTING")
+        # ...and anything from it brings the card back to normal.
+        post("msg", {"agent": "E2E-A", "project": "e2e", "text": "Back"})
+        a = agents()["E2E-A"]
+        self.assertFalse(a["restored"])
+        self.assertEqual(a["label"], "WORKING")
+
     def test_done(self):
         post("state", {"agent": "E2E-B", "project": "e2e", "status": "working", "title": "B"})
         post("done", {"agent": "E2E-B", "project": "e2e", "summary": "All good"})

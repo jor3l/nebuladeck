@@ -11,11 +11,14 @@ class Api {
 
   explicit Api(Ui& ui) : ui_(ui) {}
   void begin();
+  void dirtyAll() { ui_.dirty = true; }
   void poll(uint32_t now);
   bool connected(uint32_t now) const;  // any agent connected
   void answer(Agent& a, int choice);   // an ask option was tapped
+  void dismiss(Agent& a);              // card swiped away; it comes back if the agent sends again
   uint32_t lastRequest = 0;  // millis() of the last command (wakes a sleeping screen)
   std::function<void()> onForgetWifi;
+  std::function<void()> onRestart;  // save state, then reboot
   std::function<void()> onUpdate;  // install the available release (ui.update)
 
  private:
