@@ -81,6 +81,21 @@ To make Claude use the screen without being asked, add a line to your `~/.claude
 
 > For multi-step tasks, use the nebuladeck skill to keep the desk screen updated.
 
+## 5. Show presence while chatting (hooks)
+
+The skill covers tasks. To show "Claude connected" with live secondary text ("Thinking...",
+"Running a command...", "Needs you", "Ready") even in a plain chat, install the hooks:
+
+```bash
+nebuladeck hooks install      # merges into ~/.claude/settings.json (backup kept)
+nebuladeck hooks uninstall    # removes only its own entries
+```
+
+Restart Claude Code sessions afterwards. The hooks fire on session start, each prompt, each tool
+call, permission/attention notifications, turn end and session end. They never block or print.
+An explicit task from the skill (`nebuladeck state working ...`) takes over the screen while it runs.
+`NEBULADECK_AGENT=Name` changes the "<Name> connected" label.
+
 ## Notes
 
 - Only one process may hold the serial port; the daemon is that process. Don't run

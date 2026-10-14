@@ -55,7 +55,7 @@ function onData(buf) {
     if (m.t === 'hello') {
       ready = true;
       log('device ready', JSON.stringify(m));
-      for (const k of ['state', 'done']) if (active && last[k]) sendDev(last[k]);
+      for (const k of ['presence', 'state', 'done']) if (active && last[k]) sendDev(last[k]);
     } else if (m.t === 'tap' && pending.has(m.id)) {
       const p = pending.get(m.id);
       clearTimeout(p.timer);
@@ -117,6 +117,14 @@ function handle(req, reply) {
     case 'bye':
       endSession();
       return reply({ ok: true });
+    case 'presence': { // fire-and-forget: hooks must never wait on the device
+      activate();
+      const m = { t: 'presence', agent: req.agent, text: req.text, attn: req.attn, new_turn: req.new_turn, end_turn: req.end_turn };
+      last.presence = m;
+      if (req.new_turn) { delete last.done; delete last.state; }
+      if (delivered()) sendDev(m);
+      return reply({ ok: true, delivered: delivered() });
+    }
     case 'state': {
       activate();
       const m = { t: 'state', project: req.project, status: req.status, title: req.title, progress: req.progress };

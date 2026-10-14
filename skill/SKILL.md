@@ -9,6 +9,9 @@ The user keeps a small USB touch screen on their desk so they can look away whil
 Drive it with the `nebuladeck` command. It never blocks you: with no screen attached
 the commands exit 0 and print a one-line notice, so just carry on.
 
+Plain chat is covered separately: if the user ran `nebuladeck hooks install`, the screen already shows
+"Claude connected" with "Thinking..." / "Ready" on its own. Don't repeat that; the commands below are for real tasks.
+
 ## When to use it
 
 1. **Start of a task** (more than a couple of steps): `nebuladeck state working "<what you're doing>"`

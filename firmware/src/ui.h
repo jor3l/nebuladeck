@@ -27,6 +27,9 @@ class Ui {
   bool asking = false;
   String askId, askPrompt, opts[MAXOPT];
   int nopts = 0;
+  // Presence (connected, no task): agent name + secondary text on the nebula.
+  String agent = "Claude", presence;
+  bool attn = false;
   // Completed task: shown on the nebula as "Agent idle" with a token card.
   bool completed = false;
   String summary;
@@ -40,13 +43,14 @@ class Ui {
   // Returns the tapped ask option, or -1.
   int hitAsk(int x, int y) const;
   void drawFrame(bool connected, uint32_t now);
-  bool onNebula(bool connected) const { return !connected || (completed && !asking); }
+  bool onNebula(bool connected) const { return !connected || (!asking && (completed || status == ST_IDLE)); }
   // Touch on the idle nebula.
   void ripple(int x, int y, uint32_t now) { nebula_.ripple(x, y, now / 1000.0f); }
 
  private:
   void drawIdle(uint32_t now);
   void drawDone(uint32_t now);
+  void drawPresence(uint32_t now);
   void drawStatus(uint32_t now);
   void drawAsk(uint32_t now);
 

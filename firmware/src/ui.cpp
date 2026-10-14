@@ -92,6 +92,7 @@ bool Ui::begin() {
 void Ui::reset() {
   project = ""; title = ""; status = ST_IDLE; progress = -1;
   nmsg = 0; asking = false; nopts = 0; completed = false;
+  presence = ""; attn = false;
 }
 
 void Ui::pushMsg(const String& text, uint8_t level, uint32_t ttl, uint32_t now) {
@@ -135,6 +136,37 @@ void Ui::drawIdle(uint32_t now) {
   fb_.setFont(&fonts::FreeSans9pt7b);
   fb_.setTextColor(fb_.color565(120, 130, 180));
   centerText(fb_, "waiting for host", W / 2, H / 2 + 30);
+}
+
+void Ui::drawPresence(uint32_t now) {
+  float t = now / 1000.0f;
+  nebulaHeader(fb_, nebula_, now);
+  uint16_t dot = attn ? fb_.color565(255, 190, 60) : fb_.color565(70, 220, 140);
+  float pulse = 0.5f + 0.5f * sinf(t * (attn ? 4.5f : 1.6f));
+  int cx = W / 2, cy = H / 2 - 36;
+  fb_.drawCircle(cx, cy, 22 + (int)(pulse * 10), fb_.color565(attn ? 120 : 30, attn ? 90 : 110, attn ? 30 : 80));
+  fb_.fillCircle(cx, cy, 9 + (int)(pulse * 3), dot);
+
+  fb_.setFont(&fonts::FreeSansBold12pt7b);
+  fb_.setTextColor(fb_.color565(240, 243, 255));
+  centerText(fb_, agent + " connected", W / 2, cy + 58);
+
+  // Secondary line; a trailing "..." animates.
+  String text = presence.length() ? presence : "Ready";
+  bool busy = text.endsWith("...");
+  if (busy) text.remove(text.length() - 3);
+  int lum = busy ? 170 + (int)(pulse * 85) : 190;
+  fb_.setFont(&fonts::FreeSans12pt7b);
+  fb_.setTextColor(fb_.color565(lum * 6 / 10, lum * 8 / 10, lum));
+  if (busy) {
+    String dots = String("...").substring(0, 1 + (now / 400) % 3);
+    int full = fb_.textWidth(text + "...");
+    fb_.setTextDatum(baseline_left);
+    fb_.drawString(text + dots, (W - full) / 2, cy + 96 + (int)(fb_.fontHeight() * 0.31f));
+    fb_.setTextDatum(top_left);
+  } else {
+    centerText(fb_, text, W / 2, cy + 96);
+  }
 }
 
 static String compact(uint32_t n) {
@@ -283,6 +315,7 @@ void Ui::drawFrame(bool connected, uint32_t now) {
     if (msgs[i].ttl && now - msgs[i].at > msgs[i].ttl * 1000UL) nmsg = i;  // oldest expire first
   if (!connected) drawIdle(now);
   else if (completed && !asking) drawDone(now);
+  else if (status == ST_IDLE && !asking) drawPresence(now);
   else {
     drawStatus(now);
     if (asking) drawAsk(now);

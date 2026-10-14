@@ -3,6 +3,7 @@ import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { request } from '../src/client.js';
 import { findTranscript, taskUsage } from '../src/transcript.js';
+import { presenceFromHook, agentName, installHooks, uninstallHooks } from '../src/hook.js';
 
 const USAGE = `nebuladeck <command>
 
@@ -10,6 +11,8 @@ const USAGE = `nebuladeck <command>
   msg "<text>" [--level info|warn|error] [--ttl SECONDS]
   ask "<prompt>" <option> [option...] [--timeout SECONDS]   (prints the tapped option)
   done "<summary>" [--tokens-in N --tokens-out N] [--no-tokens] [--duration S] [--transcript FILE]
+  presence "<text>" [--agent NAME] [--attn] [--new-turn] [--end-turn]   secondary line on the idle screen
+  hooks install|uninstall     keep the screen alive in plain chats via Claude Code hooks
   clear | bye | status | stop
   flash [--file image.bin] [--tag vX.Y.Z] [--port PORT]   write the firmware (board in download mode)
 
@@ -25,6 +28,7 @@ const { values: v, positionals: pos } = parseArgs({
     project: { type: 'string' }, progress: { type: 'string' }, level: { type: 'string' },
     ttl: { type: 'string' }, timeout: { type: 'string' }, 'tokens-in': { type: 'string' },
     'tokens-out': { type: 'string' }, 'no-tokens': { type: 'boolean' }, duration: { type: 'string' },
+    agent: { type: 'string' }, attn: { type: 'boolean' }, 'new-turn': { type: 'boolean' }, 'end-turn': { type: 'boolean' },
     transcript: { type: 'string' }, file: { type: 'string' }, tag: { type: 'string' }, port: { type: 'string' }, strict: { type: 'boolean' }, help: { type: 'boolean', short: 'h' },
   },
 });
@@ -71,6 +75,32 @@ async function main() {
     case 'clear': case 'bye': case 'stop':
       req = { cmd };
       break;
+    case 'presence':
+      req = { cmd, agent: v.agent ?? agentName(), text: args.join(' '), attn: !!v.attn, new_turn: !!v['new-turn'], end_turn: !!v['end-turn'] };
+      break;
+    case 'hook': { // Claude Code hook entry point: event JSON on stdin, never fails, never prints
+      try {
+        let raw = '';
+        for await (const c of process.stdin) raw += c;
+        const m = presenceFromHook(JSON.parse(raw));
+        if (!m) return;
+        req = m.bye ? { cmd: 'bye' } : { cmd: 'presence', agent: agentName(), ...m };
+        await request(req);
+      } catch {}
+      return;
+    }
+    case 'hooks': {
+      try {
+        if (args[0] === 'install') {
+          const r = installHooks();
+          console.log(r.added ? `installed ${r.added} hooks in ${r.file} (backup: settings.json.nebuladeck.bak). Restart Claude Code sessions to pick them up.` : 'hooks already installed');
+        } else if (args[0] === 'uninstall') {
+          const r = uninstallHooks();
+          console.log(r.removed ? `removed ${r.removed} hooks from ${r.file}` : 'no nebuladeck hooks found');
+        } else die('hooks install|uninstall');
+      } catch (e) { die(e.message); }
+      return;
+    }
     case 'flash': {
       const { flash } = await import('../src/flash.js');
       await flash({ file: v.file, tag: v.tag, port: v.port });
