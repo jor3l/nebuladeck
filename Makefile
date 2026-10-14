@@ -15,10 +15,12 @@ port:
 # Remove the jumper and press RST again afterwards.
 flash:
 	@test -n "$(PORT)" || { echo "No Espressif device found. Put the board in download mode (BOOT-GND, press RST)."; exit 1; }
+	-@node host/bin/nebuladeck.js stop 2>/dev/null
 	cd $(FW) && pio run -e sc01plus -t upload --upload-port $(PORT)
 
 monitor:
 	@test -n "$(PORT)" || { echo "No Espressif device found."; exit 1; }
+	-@node host/bin/nebuladeck.js stop 2>/dev/null
 	cd $(FW) && pio device monitor -p $(PORT)
 
 run: flash monitor

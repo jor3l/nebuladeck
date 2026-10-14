@@ -17,7 +17,7 @@ the commands exit 0 and print a one-line notice, so just carry on.
 4. **Need the user** (a decision, an approval): `nebuladeck ask "<question>" "<option1>" "<option2>"`
    - Prints the tapped option on stdout. Exit 2 = nobody answered within `--timeout`, exit 3 = no screen.
    - On exit 2 or 3, ask in the chat instead. Use `--timeout 120` or similar so you never hang.
-   - Max 4 options, keep each under ~16 characters. Also set `nebuladeck state waiting "<why>"` is not needed, `ask` does it.
+   - Max 4 options, keep each under ~16 characters. `ask` already switches the screen to "needs you".
 5. **Finished**: `nebuladeck done "<one-sentence result>"`
    - Token totals are filled in automatically from the session transcript.
    - Always send this as the last thing you do, even when the task failed (say so in the summary,
