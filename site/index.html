@@ -83,7 +83,20 @@
   pre { background: rgba(8, 9, 26, .72); border: 1px solid var(--line); border-radius: 10px; padding: 12px; overflow-x: auto; font-size: 14px; margin: 8px 0 0; }
   a { color: #b9a0ff; }
   small, .foot, .dim { color: var(--dim); font-size: 14px; }
-  .foot { text-align: center; margin-top: 28px; }
+  /* Floating footer: always at the bottom of the window, frosted. */
+  .foot { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); margin: 0; z-index: 5;
+    padding: 8px 16px; border-radius: 999px; white-space: nowrap; max-width: calc(100% - 24px); overflow: hidden; text-overflow: ellipsis;
+    background: rgba(12, 13, 32, .62); border: 1px solid var(--line);
+    -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); }
+  main { padding-bottom: 96px; }
+  .back { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: 14px; font-weight: 600;
+    color: var(--text); cursor: pointer; margin: 0 0 14px; padding: 7px 14px 7px 10px; border-radius: 999px;
+    background: var(--card2); border: 1px solid var(--line);
+    -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); }
+  .back span { font-size: 20px; line-height: 14px; margin-top: -2px; }
+  .back:hover { border-color: rgba(160, 100, 255, .55); }
+  .back:not([hidden]) ~ h1 { margin-bottom: 22px; }  /* a chosen view: no intro text under the title */
+  @media (max-width: 600px) { .foot { font-size: 12px; } }
   [hidden] { display: none !important; }
   .status { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; }
   .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--dim); flex: none; }
@@ -131,8 +144,9 @@
 <main>
   <div class="logo" aria-label="NebulaDeck">NEBULADECK</div>
   <div class="divider" role="presentation"></div>
-  <h1>Set up your screen</h1>
-  <p class="lead">An always-on touch display for AI agents on the Panlee SC01 Plus or SC01. It lives on your WiFi; your agents talk to it over the local network.</p>
+  <button class="back" id="back" hidden><span aria-hidden="true">‹</span> Back</button>
+  <h1 id="title">Set up your screen</h1>
+  <p class="lead" id="lead">An always-on touch display for AI agents on the Panlee SC01 Plus or SC01. It lives on your WiFi; your agents talk to it over the local network.</p>
 
   <div class="choices" role="group" aria-label="What do you want to do?">
     <button class="choice" id="pickWifi" aria-pressed="false">
@@ -327,7 +341,7 @@ EOF</pre></div>
     </div>
   </section>
 
-  <p class="foot"><a href="https://github.com/jor3l/nebuladeck">Source &amp; docs on GitHub</a> · MIT licensed · Runs on your local network only</p>
+  <p class="foot" id="foot"><a href="https://github.com/jor3l/nebuladeck">Source &amp; docs on GitHub</a> · MIT licensed · Runs on your local network only</p>
 </main>
 <script>
   // GATT service of the device's setup mode; see docs/PROTOCOL.md.
@@ -340,17 +354,38 @@ EOF</pre></div>
 
   // Choice between the two flows; ?setup=XXXX (the screen's QR) opens WiFi.
   const params = new URLSearchParams(location.search);
-  function pick(which) {
-    for (const k of ['wifi', 'flash', 'agent']) {
+  // One view at a time: the choices, or one of them with its own title and a Back button.
+  // Each view has its own address (#/wifi, #/flash, #/agent), so the browser's back works too.
+  // ("#/": a bare "#flash" would also make the browser jump to the section with that id.)
+  const viewFromHash = () => location.hash.replace(/^#\/?/, '');
+  const VIEWS = { wifi: 'Connect to WiFi', flash: 'Flash device', agent: 'Set up your agent' };
+  function show(which) {
+    if (!VIEWS[which]) which = '';
+    for (const k in VIEWS) {
       $(k).hidden = which !== k;
       $('pick' + k[0].toUpperCase() + k.slice(1)).setAttribute('aria-pressed', which === k);
     }
+    document.querySelector('.choices').hidden = !!which;
+    $('lead').hidden = !!which;
+    $('back').hidden = !which;
+    $('title').textContent = which ? VIEWS[which] : 'Set up your screen';
+    document.title = which ? VIEWS[which] + ' · NebulaDeck' : 'NebulaDeck Setup';
+    scrollTo(0, 0);
+  }
+  function pick(which) {
+    if (viewFromHash() !== which) history.pushState(null, '', location.pathname + location.search + '#/' + which);
+    show(which);
   }
   $('pickWifi').onclick = () => pick('wifi');
   $('pickFlash').onclick = () => pick('flash');
   $('pickAgent').onclick = () => pick('agent');
-  $('toAgent').onclick = (e) => { e.preventDefault(); pick('agent'); scrollTo(0, 0); };
-  if (location.hash === '#agent') pick('agent');
+  $('back').onclick = () => {
+    if (location.hash) history.pushState(null, '', location.pathname + location.search);
+    show('');
+  };
+  addEventListener('popstate', () => show(viewFromHash()));
+  $('toAgent').onclick = (e) => { e.preventDefault(); pick('agent'); };
+  show(viewFromHash());
 
   // --- Agent setup: every command is generated from the device address ---
   const DEFAULT_HOST = 'nebuladeck.local';
@@ -454,9 +489,9 @@ Titles under 60 characters, messages under 90, in plain words a person can read 
     catch { b.textContent = 'Select & copy'; }
     setTimeout(() => (b.textContent = 'Copy'), 1500);
   });
-  $('toWifi').onclick = (e) => { e.preventDefault(); pick('wifi'); scrollTo(0, 0); };
+  $('toWifi').onclick = (e) => { e.preventDefault(); pick('wifi'); };
   if (params.has('setup')) {
-    pick('wifi');
+    if (!location.hash) show('wifi');
     const id = params.get('setup').replace(/[^0-9A-Fa-f]/g, '').slice(0, 4).toUpperCase();
     if (id) $('expectName').textContent = 'NebulaDeck-' + id;
   }
@@ -567,7 +602,7 @@ Titles under 60 characters, messages under 90, in plain words a person can read 
         $('doneSsid').textContent = chosen ?? s.saved ?? '';
         $('doneHost').textContent = s.host;
         $('doneIp').textContent = s.ip;
-        $('useIp').onclick = (e) => { e.preventDefault(); hostInput.value = s.ip; setHost(s.ip); pick('agent'); scrollTo(0, 0); };
+        $('useIp').onclick = (e) => { e.preventDefault(); hostInput.value = s.ip; setHost(s.ip); pick('agent'); };
         break;
     }
   }

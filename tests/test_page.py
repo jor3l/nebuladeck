@@ -112,6 +112,28 @@ class WifiSetup(unittest.TestCase):
 
 
 @unittest.skipUnless(chrome(), "Chrome/Chromium not found (set CHROME=...)")
+class Navigation(unittest.TestCase):
+    def test_choosing_shows_only_that_view_with_its_title_and_back(self):
+        r = run("""
+          const vis = (id) => !$(id).hidden;
+          const home = { title: $('title').textContent, choices: !document.querySelector('.choices').hidden, back: vis('back') };
+          $('pickFlash').click(); await wait(50);
+          const flash = { title: $('title').textContent, choices: !document.querySelector('.choices').hidden,
+                          back: vis('back'), flash: vis('flash'), wifi: vis('wifi'), hash: location.hash };
+          $('back').click(); await wait(50);
+          const again = { title: $('title').textContent, choices: !document.querySelector('.choices').hidden, back: vis('back'), flash: vis('flash') };
+          window.RESULT = { home, flash, again };
+        """)
+        self.assertEqual(r["home"], {"title": "Set up your screen", "choices": True, "back": False})
+        self.assertEqual(r["flash"], {"title": "Flash device", "choices": False, "back": True, "flash": True, "wifi": False, "hash": "#/flash"})
+        self.assertEqual(r["again"], {"title": "Set up your screen", "choices": True, "back": False, "flash": False})
+
+    def test_qr_link_opens_wifi(self):
+        r = run("window.RESULT = { title: $('title').textContent, wifi: !$('wifi').hidden };", "?setup=ABCD")
+        self.assertEqual(r, {"title": "Connect to WiFi", "wifi": True})
+
+
+@unittest.skipUnless(chrome(), "Chrome/Chromium not found (set CHROME=...)")
 class AgentSetup(unittest.TestCase):
     def test_address_flows_into_every_command(self):
         r = run("""
