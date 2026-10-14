@@ -247,16 +247,30 @@ int Ui::hitAsk(int px, int py) const {
   return -1;
 }
 
-static void nebulaHeader(LGFX_Sprite& fb, Nebula& nebula, uint32_t now) {
-  nebula.draw(fb, now / 1000.0f);
-  fb.setFont(&fonts::FreeSansBold9pt7b);
-  fb.setTextColor(fb.color565(150, 160, 210));
-  centerText(fb, "N E B U L A D E C K", W / 2, 44);
+// Nebula background and the NEBULADECK logo. When "All agents" is showing, the logo eases to
+// the top left at ~70% size (and back), so both have their own tap area.
+void Ui::header(uint32_t now) {
+  nebula_.draw(fb_, now / 1000.0f);
+  const Agent* v = view();
+  float target = !net.setup && count() > 1 && v ? 1.0f : 0.0f;
+  float dt = headerAt_ ? min((now - headerAt_) / 1000.0f, 0.1f) : 1.0f;
+  headerAt_ = now;
+  headerK_ += (target - headerK_) * min(1.0f, dt * 9.0f);
+  if (fabsf(target - headerK_) < 0.01f) headerK_ = target;
+  float e = headerK_ * headerK_ * (3 - 2 * headerK_);  // smoothstep
+  float size = 1.0f - 0.3f * e;
+  fb_.setFont(&fonts::FreeSansBold9pt7b);
+  fb_.setTextSize(size);
+  int w = fb_.textWidth("N E B U L A D E C K");
+  int cx = (int)(W / 2 + (16 + w / 2 - W / 2) * e), cy = (int)(44 + (21 - 44) * e);
+  fb_.setTextColor(fb_.color565(150, 160, 210));
+  centerText(fb_, "N E B U L A D E C K", cx, cy);
+  fb_.setTextSize(1);
 }
 
 void Ui::drawIdle(uint32_t now) {
   float t = now / 1000.0f;
-  nebulaHeader(fb_, nebula_, now);
+  header(now);
   float pulse = 0.5f + 0.5f * sinf(t * 1.4f);
 
   int b = 150 + (int)(pulse * 105);
@@ -277,7 +291,7 @@ void Ui::drawIdle(uint32_t now) {
 void Ui::drawPresence(uint32_t now) {
   const Agent& a = *view();
   float t = now / 1000.0f;
-  nebulaHeader(fb_, nebula_, now);
+  header(now);
   uint16_t dot = a.attn ? fb_.color565(255, 190, 60) : fb_.color565(PURPLE_R, PURPLE_G, PURPLE_B);
   float pulse = 0.5f + 0.5f * sinf(t * (a.attn ? 4.5f : 1.6f));
   int cx = W / 2, cy = H / 2 - 36;
@@ -325,7 +339,7 @@ static String compact(uint32_t n) {
 void Ui::drawDone(uint32_t now) {
   const Agent& a = *view();
   float t = now / 1000.0f;
-  nebulaHeader(fb_, nebula_, now);
+  header(now);
   uint16_t green = fb_.color565(70, 220, 140);
 
   // Check mark in a ring.
@@ -488,7 +502,7 @@ bool Ui::hitCancel(int px, int py) const {
 
 void Ui::drawSetup(uint32_t now) {
   float t = now / 1000.0f;
-  nebulaHeader(fb_, nebula_, now);
+  header(now);
   fb_.setFont(&fonts::FreeSansBold18pt7b);
   fb_.setTextColor(fb_.color565(240, 243, 255));
   centerText(fb_, "Welcome", W / 2, 88);
@@ -693,7 +707,7 @@ int Ui::hitCard(int px, int py) const {
 
 void Ui::drawAgents(uint32_t now) {
   float t = now / 1000.0f;
-  nebulaHeader(fb_, nebula_, now);
+  header(now);
   int n = count();
   fb_.setFont(&fonts::FreeSans9pt7b);
   fb_.setTextColor(fb_.color565(150, 160, 210));

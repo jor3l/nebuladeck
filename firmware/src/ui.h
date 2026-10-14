@@ -109,7 +109,12 @@ class Ui {
   int hitUpdate(int x, int y) const;
   bool showingUpdate(bool connected) const { return updatePrompt && !showingInfo(connected) && !net.setup && onNebula(connected); }
   bool showingInfo(bool connected) const { return info && !net.setup && onNebula(connected); }
-  bool hitLogo(int x, int y) const { return x > 50 && x < W_ - 50 && y > 16 && y < 72; }
+  // The NEBULADECK logo opens the device info sheet. With "All agents" showing it sits small
+  // at the top left, so the two never share a tap area.
+  bool hitLogo(int x, int y) const {
+    if (hitBack(x, y)) return false;
+    return headerK_ > 0.5f ? x < 180 && y < 46 : x > 50 && x < W_ - 50 && y > 16 && y < 72;
+  }
   // Info sheet: 0 = check/install, 1 = forget, -1 = inside the sheet, -2 = outside (close).
   int hitInfo(int x, int y) const;
   // Install progress, drawn straight to the panel (the main loop is blocked meanwhile).
@@ -134,6 +139,9 @@ class Ui {
   void drawInfo(uint32_t now);
   void drawAgents(uint32_t now);
   void drawBack();
+  void header(uint32_t now);  // nebula background + the NEBULADECK logo (animated position)
+  float headerK_ = 0;         // logo: 0 = centred, 1 = small at the top left
+  uint32_t headerAt_ = 0;
   static constexpr int W_ = 320;
 
   LGFX_Device& lcd_;
