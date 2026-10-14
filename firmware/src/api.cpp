@@ -106,9 +106,12 @@ void Api::refreshParent(JsonDocument& sub, uint32_t now) {
   JsonDocument p;
   p["agent"] = sub["agent"];
   if (sub["project"].is<const char*>()) p["project"] = sub["project"];
-  Agent* parent = resolve(p, now, false);
+  // Subagents are rows inside their session's card: make sure the session has one.
+  Agent* parent = resolve(p, now, true);
   if (!parent) return;
+  if (!parent->presence.length() && parent->status == ST_IDLE) parent->presence = working(1);
   parent->lastSeen = now;
+  parent->restored = false;  // its subagent is active, so the session is too
   int kids = ui_.children(*parent);
   bool showsWorking = parent->presence.endsWith("agents working...") || parent->presence == "An agent is working...";
   if (showsWorking) parent->presence = kids ? working(kids) : String("Ready");
@@ -267,7 +270,13 @@ void Api::info() {
   }
   // In card order (needs you first), with each card's label.
   JsonArray list = doc["agents"].to<JsonArray>();
-  int idx[Ui::MAXAGENTS], n = ui_.cardOrder(idx);
+  // Each session is followed by its subagents (drawn as rows inside its card).
+  int cards[Ui::MAXAGENTS], nc = ui_.cardOrder(cards), idx[Ui::MAXAGENTS], n = 0;
+  for (int k = 0; k < nc; k++) {
+    idx[n++] = cards[k];
+    for (int j = 0; j < Ui::MAXAGENTS; j++)
+      if (ui_.agents[j].used && ui_.agents[j].sub.length() && ui_.parentOf(ui_.agents[j]) == cards[k]) idx[n++] = j;
+  }
   for (int k = 0; k < n; k++) {
     const Agent& a = ui_.agents[idx[k]];
     JsonObject o = list.add<JsonObject>();

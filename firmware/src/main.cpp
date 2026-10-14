@@ -17,6 +17,7 @@ static const uint32_t HOLD_MS = 5000;   // long-press on a nebula screen -> WiFi
 static const uint32_t SLEEP_MS = 180000;  // no touch and no agent requests for this long -> screen off
 static const uint32_t ATTN_ON_MS = 600000;  // "needs you" keeps the screen lit at most this long
 static const int BRIGHTNESS = 200;
+static bool screenOffRequest = false;  // "Turn screen off" tapped in the logo menu
 
 void setup() {
   Serial.begin(115200);
@@ -70,6 +71,20 @@ void loop() {
   static int bright = BRIGHTNESS;
   static bool asleep = false, swallow = false;
   if (touching) lastTouch = now;
+  // Screen off (logo menu): dark until the next tap, whatever arrives meanwhile. Requests are
+  // still handled and saved above; only the display rests. The waking tap is swallowed.
+  static bool screenOff = false, offTap = false;
+  if (screenOffRequest) { screenOffRequest = false; screenOff = true; lcd.setBrightness(0); }
+  if (screenOff) {
+    if (touching && !down) { screenOff = false; offTap = true; lcd.setBrightness(BRIGHTNESS); }
+    else { down = touching; return; }
+  }
+  if (offTap) {
+    if (!touching) offTap = false;
+    down = touching;
+    return;
+  }
+
   uint32_t lastActive = (int32_t)(api.lastRequest - lastTouch) > 0 ? api.lastRequest : lastTouch;
   static uint32_t attnSince = 0;
   bool anyAsking = false, attn = false;
@@ -167,6 +182,7 @@ void loop() {
       else if (b == 0) ota.checkNow();
       else if (b == 1 && ui.forgetArmed && now - ui.forgetArmed < 4000) { ui.info = false; ui.forgetArmed = 0; net.forget(); }
       else if (b == 1) ui.forgetArmed = now;
+      else if (b == 2) { ui.info = false; screenOffRequest = true; }
     } else if (still && drag < 15) {
       int b = ui.hitUpdate(sx, sy);
       if (b == 0) ota.requestInstall();

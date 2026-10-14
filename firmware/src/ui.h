@@ -110,6 +110,9 @@ class Ui {
   int hitCard(int x, int y) const;
   // Card order: needs you first, then busy agents, then the rest. Returns how many.
   int cardOrder(int* idx) const;
+  int parentOf(const Agent& c) const;  // a subagent's session (index), or -1
+  int cardHeight(int i) const;         // a card's height, including its subagent rows
+  static uint16_t labelColor(LovyanGFX& g, const Agent& a, bool hot);
   static const char* cardLabel(const Agent& a);  // QUESTION, NEEDS YOU, DONE, WORKING, ACTIVE, READY...
   int maxScroll() const;
   // "‹ All agents" on an opened agent's screens.
@@ -127,7 +130,7 @@ class Ui {
     if (hitBack(x, y)) return false;
     return headerK_ > 0.5f ? x < 180 && y < 46 : x > 50 && x < W_ - 50 && y > 16 && y < 72;
   }
-  // Info sheet: 0 = check/install, 1 = forget, -1 = inside the sheet, -2 = outside (close).
+  // Info sheet: 0 = check/install, 1 = forget, 2 = screen off, -1 = inside the sheet, -2 = outside (close).
   int hitInfo(int x, int y) const;
   // Install progress, drawn straight to the panel (the main loop is blocked meanwhile).
   void drawUpdating();

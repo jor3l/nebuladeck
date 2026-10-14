@@ -106,8 +106,8 @@ Everything happens on [jor3l.github.io/nebuladeck](https://jor3l.github.io/nebul
 
 Full walkthrough: [docs/SETUP-MAC.md](docs/SETUP-MAC.md). API and Bluetooth details: [docs/PROTOCOL.md](docs/PROTOCOL.md).
 
-Tap the **NEBULADECK** logo for device info: version, network, IP, **Check updates** and
-**Forget WiFi**. Holding the screen for 5 seconds also opens WiFi setup.
+Tap the **NEBULADECK** logo for device info: version, network, IP, **Check updates**,
+**Forget WiFi** and **Turn screen off** (dark until you tap it; it keeps receiving updates meanwhile). Holding the screen for 5 seconds also opens WiFi setup.
 
 ## Releases
 

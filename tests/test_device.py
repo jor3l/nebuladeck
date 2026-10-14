@@ -135,7 +135,9 @@ class Device(unittest.TestCase):
         time.sleep(1)
         self.assertEqual(call("/answer?id=e2e-q1")[1], "pending")
         self.assertEqual(call("/ask?id=e2e-q1")[1]["state"], "pending")
-        self.assertTrue(agents()["E2E-A"]["asking"])
+        info = call("/info")[1]
+        a = [x for x in info["agents"] if x["agent"] == "E2E-A" and x["project"] == "e2e"]
+        self.assertTrue(a and a[0]["asking"], "question ended early; device log: %s" % info.get("log"))
         time.sleep(3)
         self.assertEqual(call("/answer?id=e2e-q1")[1], "cancelled")
         a = agents()["E2E-A"]

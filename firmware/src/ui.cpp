@@ -599,10 +599,11 @@ void Ui::drawUpdatePrompt() {
 }
 
 // Device info sheet, opened by tapping the logo.
-static const int IN_TOP = H - 304, IN_BY = H - 74, IN_BH = 52;
+static const int IN_TOP = H - 364, IN_BY = H - 74, IN_BH = 52, OFF_BY = H - 136, OFF_BH = 48;
 
 int Ui::hitInfo(int px, int py) const {
   if (py < IN_TOP) return -2;
+  if (py >= OFF_BY && py <= OFF_BY + OFF_BH && px >= 16 && px < W - 16) return 2;  // screen off
   if (py >= IN_BY && py <= IN_BY + IN_BH) {
     if (px >= 16 && px < W / 2 - 6) return 0;
     if (px >= W / 2 + 6 && px < W - 16) return 1;
@@ -611,7 +612,7 @@ int Ui::hitInfo(int px, int py) const {
 }
 
 void Ui::drawInfo(uint32_t now) {
-  const int IN_TOP = ::IN_TOP + sheetDrag, IN_BY = ::IN_BY + sheetDrag;
+  const int IN_TOP = ::IN_TOP + sheetDrag, IN_BY = ::IN_BY + sheetDrag, OFF_BY = ::OFF_BY + sheetDrag;
   fb_.fillRectAlpha(0, 0, W, H, 150, fb_.color565(2, 3, 10));
   fb_.fillRoundRect(0, IN_TOP, W, H - IN_TOP + 20, 22, fb_.color565(20, 25, 52));
   fb_.fillRoundRect(W / 2 - 22, IN_TOP + 8, 44, 4, 2, fb_.color565(70, 80, 130));
@@ -657,6 +658,12 @@ void Ui::drawInfo(uint32_t now) {
   fb_.setFont(&fonts::FreeSansBold9pt7b);
   fb_.setTextColor(busy ? fb_.color565(120, 130, 180) : fb_.color565(4, 12, 28));
   centerText(fb_, update.length() ? "Install update" : "Check updates", 16 + bw / 2, IN_BY + IN_BH / 2);
+  // Screen off: stays dark until a tap; the device keeps receiving and saving meanwhile.
+  fb_.fillRoundRect(16, OFF_BY, W - 32, OFF_BH, 14, fb_.color565(28, 30, 62));
+  fb_.drawRoundRect(16, OFF_BY, W - 32, OFF_BH, 14, fb_.color565(60, 56, 120));
+  fb_.setFont(&fonts::FreeSansBold9pt7b);
+  fb_.setTextColor(fb_.color565(220, 225, 250));
+  centerText(fb_, "Turn screen off", W / 2, OFF_BY + OFF_BH / 2);
   fb_.setTextColor(armed ? fb_.color565(20, 4, 8) : fb_.color565(255, 140, 150));
   centerText(fb_, armed ? "Tap to confirm" : "Forget WiFi", W / 2 + 6 + bw / 2, IN_BY + IN_BH / 2);
 }
@@ -695,13 +702,23 @@ static String fit(LovyanGFX& g, String s, int w) {
 }
 
 int Ui::maxScroll() const {
-  int n = count();
-  return max(0, n * (CARD_H + CARD_GAP) - CARD_GAP - (H - LIST_Y - 8));
+  int idx[MAXAGENTS], n = cardOrder(idx), total = 0;
+  for (int k = 0; k < n; k++) total += cardHeight(idx[k]) + CARD_GAP;
+  return max(0, total - CARD_GAP - (H - LIST_Y - 8));
 }
 
 // Busy: a task running, or a hook status line still in progress ("Running a command...").
 static bool busy(const Agent& a) {
   return !a.completed && (a.status != ST_IDLE || a.presence.endsWith("..."));
+}
+
+// The colour of a card's status word (and of a subagent row's dot).
+uint16_t Ui::labelColor(LovyanGFX& g, const Agent& a, bool hot) {
+  if (a.restored) return g.color565(110, 115, 150);
+  if (hot) return g.color565(255, 200, 90);
+  if (a.completed) return g.color565(70, 220, 140);
+  if (a.status == ST_IDLE && busy(a)) return statusColor(g, ST_WORKING);
+  return statusColor(g, a.status);
 }
 
 // Hook-only agents have no task status: their status line says whether they're busy.
@@ -711,39 +728,49 @@ const char* Ui::cardLabel(const Agent& a) {
          : a.status != ST_IDLE ? statusLabel(a.status) : busy(a) ? "ACTIVE" : "READY";
 }
 
-// Sessions by attention (needs you, busy, the rest), each followed by its own subagents.
+// The session a subagent belongs to (same name and project), or -1.
+int Ui::parentOf(const Agent& c) const {
+  for (int i = 0; i < MAXAGENTS; i++) {
+    const Agent& p = agents[i];
+    if (p.used && !p.sub.length() && p.name.equalsIgnoreCase(c.name) && p.project == c.project) return i;
+  }
+  return -1;
+}
+
+// Cards by attention: needs you (itself or a subagent), busy, the rest. Subagents are rows
+// inside their session's card; one whose session has no card gets its own.
 int Ui::cardOrder(int* idx) const {
-  auto rank = [](const Agent& a) { return a.needsYou() ? 0 : busy(a) ? 1 : 2; };
-  auto parentOf = [&](const Agent& c) -> int {
-    for (int i = 0; i < MAXAGENTS; i++) {
-      const Agent& p = agents[i];
-      if (p.used && !p.sub.length() && p.name.equalsIgnoreCase(c.name) && p.project == c.project) return i;
-    }
-    return -1;
+  auto rank = [&](int i) {
+    const Agent& a = agents[i];
+    bool kidNeeds = false;
+    for (const Agent& c : agents) kidNeeds |= c.used && c.sub.length() && parentOf(c) == i && c.needsYou();
+    return a.needsYou() || kidNeeds ? 0 : busy(a) ? 1 : 2;
   };
   int n = 0;
   for (int pass = 0; pass < 3; pass++)
     for (int i = 0; i < MAXAGENTS; i++) {
       const Agent& a = agents[i];
-      if (!a.used || rank(a) != pass) continue;
-      if (a.sub.length() && parentOf(a) >= 0) continue;  // listed under its session below
+      if (!a.used || (a.sub.length() && parentOf(a) >= 0) || rank(i) != pass) continue;
       idx[n++] = i;
-      if (a.sub.length()) continue;
-      for (int cp = 0; cp < 3; cp++)
-        for (int j = 0; j < MAXAGENTS; j++) {
-          const Agent& c = agents[j];
-          if (c.used && c.sub.length() && rank(c) == cp && parentOf(c) == i) idx[n++] = j;
-        }
     }
   return n;
 }
 
+// A card's height: the session's own content plus one row per running subagent.
+static const int SUB_ROW = 26;
+int Ui::cardHeight(int i) const {
+  int kids = 0;
+  for (const Agent& c : agents) kids += c.used && c.sub.length() && parentOf(c) == i;
+  return CARD_H + (kids ? 4 + kids * SUB_ROW : 0);
+}
+
 int Ui::hitCard(int px, int py) const {
   if (py < LIST_Y) return -1;
-  int idx[MAXAGENTS], n = cardOrder(idx);
+  int idx[MAXAGENTS], n = cardOrder(idx), y = LIST_Y - scroll;
   for (int k = 0; k < n; k++) {
-    int y = LIST_Y + k * (CARD_H + CARD_GAP) - scroll;
-    if (py >= y && py < y + CARD_H && px >= 12 && px < W - 12) return idx[k];
+    int h = cardHeight(idx[k]);
+    if (py >= y && py < y + h && px >= 12 && px < W - 12) return idx[k];
+    y += h + CARD_GAP;
   }
   return -1;
 }
@@ -759,30 +786,32 @@ void Ui::drawAgents(uint32_t now) {
   scroll = max(0, min(scroll, maxScroll()));
 
   fb_.setClipRect(0, LIST_Y - 2, W, H - LIST_Y + 2);
-  int idx[MAXAGENTS], nc = cardOrder(idx);
+  int idx[MAXAGENTS], nc = cardOrder(idx), next = LIST_Y - scroll;
   for (int k = 0; k < nc; k++) {
     const Agent& a = agents[idx[k]];
-    int x = 12, w = W - 24, y = LIST_Y + k * (CARD_H + CARD_GAP) - scroll;
-    if (a.sub.length()) { x += 18; w -= 18; }  // a subagent, under its session
+    int ch = cardHeight(idx[k]);
+    int x = 12, w = W - 24, y = next;
+    next += ch + CARD_GAP;
     if (idx[k] == swipeIdx) x += swipeDx;  // follows the finger while swiped
-    if (y > H || y + CARD_H < LIST_Y) continue;
-    bool hot = a.needsYou();
+    if (y > H || y + ch < LIST_Y) continue;
+    bool kidNeeds = false;
+    for (const Agent& c : agents) kidNeeds |= c.used && c.sub.length() && parentOf(c) == idx[k] && c.needsYou();
+    bool hot = a.needsYou() || kidNeeds;
     float pulse = 0.5f + 0.5f * sinf(t * 4.5f);
     // A card that needs you turns amber and pulses; the rest stay dark violet.
     uint16_t bg = hot ? fb_.color565(46 + (int)(pulse * 26), 28 + (int)(pulse * 12), 8)
                   : a.restored ? fb_.color565(10, 11, 24) : fb_.color565(14, 16, 38);
     uint16_t edge = hot ? fb_.color565(255, 170 + (int)(pulse * 40), 50) : a.restored ? fb_.color565(32, 30, 60) : fb_.color565(48, 40, 100);
-    fb_.fillRoundRect(x, y, w, CARD_H, 16, bg);
-    fb_.drawRoundRect(x, y, w, CARD_H, 16, edge);
-    if (hot) fb_.drawRoundRect(x + 1, y + 1, w - 2, CARD_H - 2, 15, edge);
+    fb_.fillRoundRect(x, y, w, ch, 16, bg);
+    fb_.drawRoundRect(x, y, w, ch, 16, edge);
+    if (hot) fb_.drawRoundRect(x + 1, y + 1, w - 2, ch - 2, 15, edge);
 
     // Logo (or a dot), name and project, status on the right.
     if (const AgentIcon* ic = iconFor(a.name)) drawMask(fb_, ic->small, ICON_SMALL, x + 24, y + 24, ic->r, ic->g, ic->b);
     else fb_.fillCircle(x + 24, y + 24, 6, fb_.color565(PURPLE_R, PURPLE_G, PURPLE_B));
     bool active = a.status == ST_IDLE && busy(a);
     const char* label = cardLabel(a);
-    uint16_t lc = a.restored ? fb_.color565(110, 115, 150) : hot ? fb_.color565(255, 200, 90) : a.completed ? fb_.color565(70, 220, 140)
-                  : active ? statusColor(fb_, ST_WORKING) : statusColor(fb_, a.status);
+    uint16_t lc = labelColor(fb_, a, a.needsYou());
     fb_.setFont(&fonts::FreeSansBold9pt7b);
     int lw = fb_.textWidth(label);
     fb_.setTextColor(lc);
@@ -814,6 +843,26 @@ void Ui::drawAgents(uint32_t now) {
       int bw = w - 32, fw = (int)(bw * min(a.progress, 1.0f));
       fb_.fillRoundRect(x + 16, y + CARD_H - 10, bw, 4, 2, fb_.color565(32, 38, 72));
       if (fw > 0) fb_.fillRoundRect(x + 16, y + CARD_H - 10, max(fw, 4), 4, 2, statusColor(fb_, a.status));
+    }
+
+    // Its running subagents, one compact row each: icon, name, a dot in the colour its status
+    // word would have.
+    int ry = y + CARD_H + 4;
+    for (const Agent& c : agents) {
+      if (!c.used || !c.sub.length() || parentOf(c) != idx[k]) continue;
+      fb_.drawFastHLine(x + 14, ry - 2, w - 28, fb_.color565(36, 34, 76));
+      int cy = ry + SUB_ROW / 2 - 1;
+      if (const AgentIcon* ic = iconFor(c.name)) drawMask(fb_, ic->small, ICON_SMALL, x + 26, cy, ic->r, ic->g, ic->b);
+      else fb_.fillCircle(x + 26, cy, 5, fb_.color565(PURPLE_R, PURPLE_G, PURPLE_B));
+      fb_.setFont(&fonts::FreeSans9pt7b);
+      fb_.setTextDatum(middle_left);
+      fb_.setTextColor(fb_.color565(200, 206, 236));
+      fb_.drawString(fit(fb_, c.role.length() ? c.role : String("agent"), w - 90), x + 44, cy);
+      fb_.setTextDatum(top_left);
+      bool cNeeds = c.needsYou();
+      int r = cNeeds ? 5 + (int)(pulse * 1.5f) : 5;
+      fb_.fillCircle(x + w - 22, cy, r, labelColor(fb_, c, cNeeds));
+      ry += SUB_ROW;
     }
   }
   fb_.clearClipRect();

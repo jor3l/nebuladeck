@@ -118,8 +118,10 @@ is not sent. For `PreToolUse`, `sed` pulls out only `tool_name` and sends it as 
 | `SessionEnd` | `bye` |
 
 Subagents: events fired inside a subagent carry Claude Code's `agent_id` / `agent_type`, which the
-hooks send as `sub` / `role`. Each running subagent gets its own card ("Claude · Explore"), listed
-indented under its session, with its own status line and permission prompts. `SubagentStart` creates
+hooks send as `sub` / `role`. Each running subagent is a compact row inside its session's card:
+its icon, its type ("Explore", "general-purpose") and a dot in its status colour; a subagent needing
+you turns the whole card amber. The session's card is created if a subagent shows up first.
+`/api/info` lists each session followed by its subagents. `SubagentStart` creates
 it, `SubagentStop` removes it, and so does the session's `SessionEnd` (or any `bye` for the session).
 A subagent card without events for 10 minutes is dropped. While a session has subagent cards, its own
 `Stop` and idle reminder read "An agent is working..." / "N agents working..." (ACTIVE) instead of
