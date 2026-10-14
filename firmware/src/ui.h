@@ -72,7 +72,7 @@ struct Agent {
 
 class Ui {
  public:
-  static constexpr int MAXAGENTS = 6;
+  static constexpr int MAXAGENTS = 8;
   static constexpr int MAXOPT = Agent::MAXOPT;
 
   Agent agents[MAXAGENTS];

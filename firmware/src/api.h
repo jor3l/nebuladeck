@@ -25,7 +25,12 @@ class Api {
   int apply(const char* t, JsonDocument& in, JsonDocument& out, uint32_t now);
   Agent* resolve(JsonDocument& doc, uint32_t now, bool create);
   Agent* findAsk(const String& id);
-  void cancelAsk(Agent& a);
+  void cancelAsk(Agent& a, const char* why);
+  // Recent events for debugging (why questions ended, agents came and went); in /api/info.
+  static constexpr int LOGN = 12;
+  String log_[LOGN];
+  int logNext_ = 0;
+  void note(const String& s);
 
   Ui& ui_;
 };

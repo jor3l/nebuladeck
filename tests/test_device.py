@@ -63,6 +63,21 @@ class Device(unittest.TestCase):
             raise unittest.SkipTest("no device at %s (%s)" % (HOST, e))
         print("device: NebulaDeck %s at %s" % (info["fw"], info["ip"]), file=sys.stderr)
         cls.tearDownClass()
+        # The device replaces its least recently active agent when every slot is taken; with
+        # too few free slots that could be one of ours mid-test. Don't evict real sessions.
+        busy = [a for a in call("/info")[1]["agents"] if a["project"] != "e2e"]
+        free = info.get("max_agents", 6) - len(busy)
+        if free < len(AGENTS):
+            raise unittest.SkipTest("device has %d agents connected; the tests need %d free slots"
+                                    % (len(busy), len(AGENTS)))
+        cls.uptime = info.get("uptime_s", 0)
+
+    def setUp(self):
+        # A restart wipes every agent and makes any question read "cancelled": say so plainly.
+        info = call("/info")[1]
+        if "uptime_s" in info and info["uptime_s"] < self.uptime:
+            self.fail("the device restarted during the tests (uptime %ds, free heap %s)" % (info["uptime_s"], info.get("heap")))
+        type(self).uptime = info.get("uptime_s", 0)
 
     @classmethod
     def tearDownClass(cls):

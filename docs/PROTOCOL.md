@@ -33,11 +33,11 @@ have `error`.
 
 ### Several agents
 
-The device keeps up to 6 agents, each identified by `agent` + `project` (e.g. "Claude" in
+The device keeps up to 8 agents, each identified by `agent` + `project` (e.g. "Claude" in
 "nebuladeck"), with its own status, task, activity history (12 entries), question and summary.
 Send both in every request. A request with a known `agent` but no `project` goes to the most
 recently active agent of that name. An agent is dropped after 30 minutes without requests or
-on `bye`; with all 6 slots taken, the least recently seen one is replaced.
+on `bye`; with all 8 slots taken, the least recently seen one is replaced.
 
 With one agent the screens are the single-agent ones below. With two or more, the nebula shows
 one card per agent (logo, name and project, what it is doing, its latest activity, progress);

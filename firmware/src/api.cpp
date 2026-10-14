@@ -83,13 +83,14 @@ Agent* Api::resolve(JsonDocument& doc, uint32_t now, bool create) {
   if (!slot) {
     for (Agent& a : ui_.agents)
       if (!slot || (int32_t)(slot->lastSeen - a.lastSeen) > 0) slot = &a;
-    cancelAsk(*slot);
+    cancelAsk(*slot, "evicted");
   }
   slot->clear();
   slot->used = true;
   slot->name = name.length() ? name : String("Agent");
   slot->project = project;
   slot->lastSeen = now;
+  note("new " + slot->name + " / " + slot->project);
   return slot;
 }
 
@@ -169,8 +170,8 @@ void Api::poll(uint32_t now) {
     if (!a.used) continue;
     // Signed: requests handled inside poll(now) stamp lastSeen with a slightly later
     // millis() than `now`; unsigned, that wrapped to ~49 days and dropped the agent.
-    if ((int32_t)(now - a.lastSeen) >= (int32_t)LEASE_MS) { cancelAsk(a); a.clear(); continue; }
-    if (a.askState == ASK_PENDING && a.askDeadline && (int32_t)(now - a.askDeadline) >= 0) cancelAsk(a);
+    if ((int32_t)(now - a.lastSeen) >= (int32_t)LEASE_MS) { cancelAsk(a, "lease"); note("drop " + a.name); a.clear(); continue; }
+    if (a.askState == ASK_PENDING && a.askDeadline && (int32_t)(now - a.askDeadline) >= 0) cancelAsk(a, "deadline");
   }
 }
 
@@ -188,6 +189,14 @@ void Api::info() {
   doc["w"] = 320;
   doc["h"] = 480;
   doc["session"] = ui_.count() > 0;
+  doc["max_agents"] = Ui::MAXAGENTS;
+  doc["uptime_s"] = millis() / 1000;
+  doc["heap"] = ESP.getFreeHeap();
+  JsonArray lg = doc["log"].to<JsonArray>();
+  for (int i = 0; i < LOGN; i++) {
+    const String& e = log_[(logNext_ + i) % LOGN];
+    if (e.length()) lg.add(e);
+  }
   JsonArray list = doc["agents"].to<JsonArray>();
   for (const Agent& a : ui_.agents) {
     if (!a.used) continue;
@@ -247,13 +256,13 @@ int Api::apply(const char* t, JsonDocument& doc, JsonDocument& out, uint32_t now
   lastRequest = now;
 
   if (!strcmp(t, "bye")) {  // this agent leaves; the others stay
-    if (Agent* a = resolve(doc, now, false)) { cancelAsk(*a); a->clear(); }
+    if (Agent* a = resolve(doc, now, false)) { cancelAsk(*a, "bye"); note("bye " + a->name); a->clear(); }
     return 200;
   }
   if (!strcmp(t, "ask_cancel")) {
     const char* id = doc["id"] | "";
     Agent* a = *id ? findAsk(id) : resolve(doc, now, false);
-    if (a) cancelAsk(*a);
+    if (a) cancelAsk(*a, "ask_cancel");
     return 200;
   }
   if (!strcmp(t, "ask")) {
@@ -275,7 +284,7 @@ int Api::apply(const char* t, JsonDocument& doc, JsonDocument& out, uint32_t now
     a.pushMsg(doc["text"] | "", parseLevel(doc["level"]), doc["ttl"] | 0, now);
   } else if (!strcmp(t, "ask")) {
     JsonArray opts = doc["options"].as<JsonArray>();
-    cancelAsk(a);
+    cancelAsk(a, "new ask");
     char id[9];
     snprintf(id, sizeof id, "%08lx", (unsigned long)esp_random());
     // Callers may pick the id (handy in shell scripts); otherwise it's random.
@@ -294,7 +303,7 @@ int Api::apply(const char* t, JsonDocument& doc, JsonDocument& out, uint32_t now
     a.askState = ASK_PENDING;
     out["id"] = a.askId;
   } else if (!strcmp(t, "done")) {
-    cancelAsk(a);
+    cancelAsk(a, "done");
     a.completed = true;
     a.status = ST_DONE;
     a.summary = doc["summary"] | "";
@@ -313,8 +322,13 @@ int Api::apply(const char* t, JsonDocument& doc, JsonDocument& out, uint32_t now
   return 200;
 }
 
-void Api::cancelAsk(Agent& a) {
-  if (a.askState == ASK_PENDING) a.askState = ASK_CANCELLED;
+void Api::note(const String& s) {
+  log_[logNext_] = String(millis() / 1000) + "s " + s;
+  logNext_ = (logNext_ + 1) % LOGN;
+}
+
+void Api::cancelAsk(Agent& a, const char* why) {
+  if (a.askState == ASK_PENDING) { a.askState = ASK_CANCELLED; note("ask " + a.askId + " cancelled: " + why); }
   if (a.asking && a.status == ST_WAITING) a.status = a.beforeAsk;
   a.asking = false;
 }
@@ -324,6 +338,7 @@ void Api::answer(Agent& a, int choice) {
   a.askState = ASK_ANSWERED;
   a.askChoice = choice;
   a.askLabel = a.opts[choice];
+  note("ask " + a.askId + " answered: " + a.askLabel);
   a.asking = false;
   if (a.status == ST_WAITING) a.status = a.beforeAsk;
 }
