@@ -41,10 +41,13 @@ void loop() {
   static bool down = false;
   static uint32_t holdStart = 0;
   static int32_t hx, hy;
+  enum : uint8_t { SH_NONE, SH_INFO, SH_UPDATE };
+  static uint8_t pressed = SH_NONE;  // which bottom sheet the finger went down on
+  static int32_t sx, sy;
   int32_t x, y;
   bool touching = lcd.getTouch(&x, &y);
   bool conn = !ui.net.setup && api.connected(now);
-  if (touching && ui.onNebula(conn) && !ui.info) {
+  if (touching && ui.onNebula(conn) && !ui.info && !pressed) {
     // Ripple on press, then a trail while dragging.
     static int32_t lx = -100, ly = -100;
     static uint32_t lastRip = 0;
@@ -56,34 +59,50 @@ void loop() {
   }
   if (touching && !down && ui.hitCancel(x, y)) net.cancelSetup();
 
-  // Device info sheet: tap the logo to open, outside to close.
+  // Bottom sheets (device info, update prompt): swipe down to dismiss, tap outside the info
+  // sheet to close it. Buttons act on release, so a swipe never presses one.
   if (!ui.showingInfo(conn)) ui.info = false;  // an ask or task took over
   bool infoSheet = ui.info;
-  if (touching && !down && infoSheet) {
-    int b = ui.hitInfo(x, y);
-    if (b == -2) ui.info = false;
-    else if (b == 0 && ui.update.length()) { ui.info = false; ota.requestInstall(); }
-    else if (b == 0) ota.checkNow();
-    else if (b == 1 && ui.forgetArmed && now - ui.forgetArmed < 4000) { ui.info = false; ui.forgetArmed = 0; net.forget(); }
-    else if (b == 1) ui.forgetArmed = now;
+  bool updateSheet = ui.showingUpdate(conn);
+  if (touching && !down && (infoSheet || updateSheet)) {
+    int b = infoSheet ? ui.hitInfo(x, y) : ui.hitUpdate(x, y);
+    if (b == -2 && infoSheet) ui.info = false;
+    else if (b != -2) { pressed = infoSheet ? SH_INFO : SH_UPDATE; sx = x; sy = y; }
   } else if (touching && !down && !ui.net.setup && ui.onNebula(conn) && ui.hitLogo(x, y)) {
     ui.info = true;
     ui.forgetArmed = 0;
     infoSheet = true;
   }
-  bool updateSheet = ui.showingUpdate(conn);
-  if (touching && !down && updateSheet) {
-    int b = ui.hitUpdate(x, y);
-    if (b == 0) ota.requestInstall();
-    else if (b == 1) ota.skip();
+  if (pressed && touching) {
+    ui.sheetDrag = max(0, (int)(y - sy));
+  } else if (pressed) {  // released
+    int drag = ui.sheetDrag;
+    ui.sheetDrag = 0;
+    bool still = pressed == SH_INFO ? ui.showingInfo(conn) : ui.showingUpdate(conn);
+    if (still && drag > 70) {
+      if (pressed == SH_INFO) ui.info = false;
+      else ui.updatePrompt = false;  // later: comes back with the next check
+    } else if (still && drag < 15 && pressed == SH_INFO) {
+      int b = ui.hitInfo(sx, sy);
+      if (b == 0 && ui.update.length()) { ui.info = false; ota.requestInstall(); }
+      else if (b == 0) ota.checkNow();
+      else if (b == 1 && ui.forgetArmed && now - ui.forgetArmed < 4000) { ui.info = false; ui.forgetArmed = 0; net.forget(); }
+      else if (b == 1) ui.forgetArmed = now;
+    } else if (still && drag < 15) {
+      int b = ui.hitUpdate(sx, sy);
+      if (b == 0) ota.requestInstall();
+      else if (b == 1) ota.skip();
+    }
+    pressed = SH_NONE;
   }
+  bool sheet = pressed || infoSheet || updateSheet;
   if (touching && !down && ui.asking && conn) {
     int c = ui.hitAsk(x, y);
     if (c >= 0) api.answer(c);
   }
 
   // Hold still on a nebula screen to reach WiFi setup.
-  if (touching && !ui.net.setup && !updateSheet && !infoSheet && ui.onNebula(conn)) {
+  if (touching && !ui.net.setup && !sheet && ui.onNebula(conn)) {
     if (!down) { holdStart = now; hx = x; hy = y; }
     if ((x - hx) * (x - hx) + (y - hy) * (y - hy) > 30 * 30) holdStart = 0;  // a drag, not a hold
     ui.hold = holdStart && now - holdStart > 1000 ? (now - holdStart - 1000) / float(HOLD_MS - 1000) : 0;

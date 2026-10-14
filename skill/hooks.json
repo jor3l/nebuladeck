@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "curl -s -m 2 -X POST \"http://${NEBULADECK_HOST:-nebuladeck.local}/api/hook?event=SessionStart\" >/dev/null 2>&1 &"
+            "command": "curl -4 -s -m 2 -X POST \"http://${NEBULADECK_HOST:-nebuladeck.local}/api/hook?event=SessionStart\" >/dev/null 2>&1 &"
           }
         ]
       }
@@ -15,7 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "curl -s -m 2 -X POST \"http://${NEBULADECK_HOST:-nebuladeck.local}/api/hook?event=UserPromptSubmit\" >/dev/null 2>&1 &"
+            "command": "curl -4 -s -m 2 -X POST \"http://${NEBULADECK_HOST:-nebuladeck.local}/api/hook?event=UserPromptSubmit\" >/dev/null 2>&1 &"
           }
         ]
       }
@@ -25,7 +25,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "t=$(sed -n 's/.*\"tool_name\" *: *\"\\([^\"]*\\)\".*/\\1/p' | head -n 1); curl -s -m 2 -X POST \"http://${NEBULADECK_HOST:-nebuladeck.local}/api/hook?event=PreToolUse&tool=$t\" >/dev/null 2>&1 &"
+            "command": "t=$(sed -n 's/.*\"tool_name\" *: *\"\\([^\"]*\\)\".*/\\1/p' | head -n 1); curl -4 -s -m 2 -X POST \"http://${NEBULADECK_HOST:-nebuladeck.local}/api/hook?event=PreToolUse&tool=$t\" >/dev/null 2>&1 &"
           }
         ]
       }
@@ -35,7 +35,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "curl -s -m 2 -X POST \"http://${NEBULADECK_HOST:-nebuladeck.local}/api/hook?event=Notification\" >/dev/null 2>&1 &"
+            "command": "curl -4 -s -m 2 -X POST \"http://${NEBULADECK_HOST:-nebuladeck.local}/api/hook?event=Notification\" >/dev/null 2>&1 &"
           }
         ]
       }
@@ -45,7 +45,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "curl -s -m 2 -X POST \"http://${NEBULADECK_HOST:-nebuladeck.local}/api/hook?event=Stop\" >/dev/null 2>&1 &"
+            "command": "curl -4 -s -m 2 -X POST \"http://${NEBULADECK_HOST:-nebuladeck.local}/api/hook?event=Stop\" >/dev/null 2>&1 &"
           }
         ]
       }
@@ -55,7 +55,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "curl -s -m 2 -X POST \"http://${NEBULADECK_HOST:-nebuladeck.local}/api/hook?event=SessionEnd\" >/dev/null 2>&1 &"
+            "command": "curl -4 -s -m 2 -X POST \"http://${NEBULADECK_HOST:-nebuladeck.local}/api/hook?event=SessionEnd\" >/dev/null 2>&1 &"
           }
         ]
       }

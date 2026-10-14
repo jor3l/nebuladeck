@@ -10,10 +10,11 @@ on their local network and takes JSON over HTTP, so plain `curl` drives it. Noth
 installed.
 
 Base URL: `http://nebuladeck.local/api` (if `$NEBULADECK_HOST` is set, use `http://$NEBULADECK_HOST/api`).
-Always pass `-m 3` and ignore failures: if the screen is off or unreachable, just carry on.
+Always pass `-4 -m 3` and ignore failures: if the screen is off or unreachable, just carry on.
+(`-4` matters: the device has no IPv6 address, and without it name lookups can stall for 5 s.)
 
 ```bash
-nd() { b='{}'; [ $# -gt 1 ] && b=$2; curl -s -m 3 -H 'Content-Type: application/json' -d "$b" "http://${NEBULADECK_HOST:-nebuladeck.local}/api/$1" >/dev/null; true; }
+nd() { b='{}'; [ $# -gt 1 ] && b=$2; curl -4 -s -m 3 -H 'Content-Type: application/json' -d "$b" "http://${NEBULADECK_HOST:-nebuladeck.local}/api/$1" >/dev/null; true; }
 ```
 
 Each Bash call is a fresh shell, so define `nd` in the same command that uses it (or write the curl out).
@@ -31,8 +32,8 @@ are for real tasks.
 4. **Need the user** (a decision, an approval): post an ask with your own short id, then poll for the answer:
    ```bash
    H="http://${NEBULADECK_HOST:-nebuladeck.local}/api"; ID=q$RANDOM
-   curl -s -m 3 -H 'Content-Type: application/json' -d "{\"id\":\"$ID\",\"prompt\":\"Delete 12 files?\",\"options\":[\"Delete\",\"Skip\"],\"timeout\":120}" "$H/ask" >/dev/null || echo unreachable
-   for _ in $(seq 125); do a=$(curl -s -m 3 "$H/answer?id=$ID"); [ "$a" = pending ] || break; sleep 1; done; echo "$a"
+   curl -4 -s -m 3 -H 'Content-Type: application/json' -d "{\"id\":\"$ID\",\"prompt\":\"Delete 12 files?\",\"options\":[\"Delete\",\"Skip\"],\"timeout\":120}" "$H/ask" >/dev/null || echo unreachable
+   for _ in $(seq 125); do a=$(curl -4 -s -m 3 "$H/answer?id=$ID"); [ "$a" = pending ] || break; sleep 1; done; echo "$a"
    ```
    - Prints `answered:<option>`, or `cancelled` (nobody answered in time). Empty or `unreachable` = no screen.
    - If it isn't `answered:...`, ask in the chat instead. Always set `timeout` so you never hang.

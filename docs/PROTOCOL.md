@@ -56,7 +56,7 @@ An ask also ends when its `timeout` passes, when `done`/`bye` arrives, or when t
 It is answered only by a tap on the screen.
 
 ```bash
-curl -s -H 'Content-Type: application/json' -d '{"status":"working","title":"Hello"}' http://nebuladeck.local/api/state
+curl -4 -s -H 'Content-Type: application/json' -d '{"status":"working","title":"Hello"}' http://nebuladeck.local/api/state
 ```
 
 ## Firmware updates (OTA)
@@ -77,7 +77,7 @@ release asset `nebuladeck-sc01plus-ota.bin` (app only) into the spare OTA slot a
 ## Hooks
 
 `skill/hooks.json` holds Claude Code hooks for presence during plain chats. Each one runs
-`curl -s -m 2 -X POST "http://${NEBULADECK_HOST:-nebuladeck.local}/api/hook?event=<Event>" &` in the
+`curl -4 -s -m 2 -X POST "http://${NEBULADECK_HOST:-nebuladeck.local}/api/hook?event=<Event>" &` in the
 background, so a missing screen never slows Claude down. The hook's stdin (which can hold whole files)
 is not sent. For `PreToolUse`, `sed` pulls out only `tool_name` and sends it as `tool`.
 
@@ -97,8 +97,8 @@ An explicit task (`state working`) takes over the screen while it runs. Set the 
 
 ```bash
 H=http://nebuladeck.local/api; ID=q$RANDOM
-curl -s -m 3 -H 'Content-Type: application/json' \
+curl -4 -s -m 3 -H 'Content-Type: application/json' \
   -d "{\"id\":\"$ID\",\"prompt\":\"Ship it?\",\"options\":[\"Yes\",\"No\"],\"timeout\":120}" $H/ask
-for _ in $(seq 125); do a=$(curl -s -m 3 "$H/answer?id=$ID"); [ "$a" = pending ] || break; sleep 1; done
+for _ in $(seq 125); do a=$(curl -4 -s -m 3 "$H/answer?id=$ID"); [ "$a" = pending ] || break; sleep 1; done
 echo "$a"   # answered:Yes | cancelled | empty (no screen)
 ```

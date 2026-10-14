@@ -58,6 +58,7 @@ class Ui {
   // Device info sheet (tap the logo): version, network, updates, forget WiFi.
   bool info = false;
   uint32_t forgetArmed = 0;  // first tap on Forget; a second tap within 4 s confirms
+  int sheetDrag = 0;         // px a bottom sheet is being swiped down
 
   explicit Ui(LGFX_Device& lcd) : lcd_(lcd), fb_(&lcd), qr_(&lcd) {}
   bool begin();
@@ -66,7 +67,7 @@ class Ui {
   // Returns the tapped ask option, or -1.
   int hitAsk(int x, int y) const;
   bool hitCancel(int x, int y) const;
-  // Update prompt buttons: 0 = update, 1 = skip, -1 = miss.
+  // Update prompt: 0 = update, 1 = skip, -1 = inside the sheet, -2 = outside.
   int hitUpdate(int x, int y) const;
   bool showingUpdate(bool connected) const { return updatePrompt && !showingInfo(connected) && !net.setup && onNebula(connected); }
   bool showingInfo(bool connected) const { return info && !net.setup && onNebula(connected); }

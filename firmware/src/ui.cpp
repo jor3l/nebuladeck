@@ -137,8 +137,7 @@ void Ui::drawIdle(uint32_t now) {
   fb_.setFont(&fonts::FreeSans9pt7b);
   fb_.setTextColor(fb_.color565(120, 130, 180));
   if (net.online) {
-    centerText(fb_, net.host, W / 2, H / 2 + 30);
-    centerText(fb_, net.ip, W / 2, H / 2 + 52);
+    centerText(fb_, "waiting for an agent", W / 2, H / 2 + 30);
   } else {
     centerText(fb_, net.ssid, W / 2, H / 2 + 30);
     fb_.setTextColor(fb_.color565(90, 100, 150));
@@ -388,6 +387,7 @@ void Ui::drawHold() {
 static const int UP_TOP = H - 186, UP_BY = H - 74, UP_BH = 52;
 
 int Ui::hitUpdate(int px, int py) const {
+  if (py < UP_TOP) return -2;
   if (py < UP_BY || py > UP_BY + UP_BH) return -1;
   if (px >= 16 && px < W / 2 - 6) return 0;
   if (px >= W / 2 + 6 && px < W - 16) return 1;
@@ -395,6 +395,8 @@ int Ui::hitUpdate(int px, int py) const {
 }
 
 void Ui::drawUpdatePrompt() {
+  // Follows the finger while being swiped down.
+  const int UP_TOP = ::UP_TOP + sheetDrag, UP_BY = ::UP_BY + sheetDrag;
   fb_.fillRoundRect(0, UP_TOP, W, H - UP_TOP + 20, 22, fb_.color565(20, 25, 52));
   fb_.fillRoundRect(W / 2 - 22, UP_TOP + 8, 44, 4, 2, fb_.color565(70, 80, 130));
   fb_.setFont(&fonts::FreeSansBold12pt7b);
@@ -428,6 +430,7 @@ int Ui::hitInfo(int px, int py) const {
 }
 
 void Ui::drawInfo(uint32_t now) {
+  const int IN_TOP = ::IN_TOP + sheetDrag, IN_BY = ::IN_BY + sheetDrag;
   fb_.fillRectAlpha(0, 0, W, H, 150, fb_.color565(2, 3, 10));
   fb_.fillRoundRect(0, IN_TOP, W, H - IN_TOP + 20, 22, fb_.color565(20, 25, 52));
   fb_.fillRoundRect(W / 2 - 22, IN_TOP + 8, 44, 4, 2, fb_.color565(70, 80, 130));

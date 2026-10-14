@@ -75,6 +75,9 @@ void Net::join() {
 
 void Net::online() {
   info_.online = true;
+  // A link-local IPv6 address lets mDNS answer AAAA queries; without one, resolvers that ask
+  // for both (browsers, curl without -4) wait ~5 s for an answer that never comes.
+  WiFi.enableIpV6();
   info_.ip = WiFi.localIP().toString();
   if (!mdns_ && MDNS.begin(HOSTNAME)) {
     MDNS.addService("http", "tcp", 80);

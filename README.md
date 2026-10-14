@@ -83,8 +83,8 @@ Everything happens on [jor3l.github.io/nebuladeck](https://jor3l.github.io/nebul
 3. **Set up your agent**: one copy-paste command installs the Claude Code skill (or `make install`
    from a clone). Other agents get an instructions snippet. Then try it:
    ```bash
-   curl -s http://nebuladeck.local/api/info
-   curl -s -H 'Content-Type: application/json' -d '{"status":"working","title":"Hello"}' http://nebuladeck.local/api/state
+   curl -4 -s http://nebuladeck.local/api/info
+   curl -4 -s -H 'Content-Type: application/json' -d '{"status":"working","title":"Hello"}' http://nebuladeck.local/api/state
    ```
 
 Full walkthrough: [docs/SETUP-MAC.md](docs/SETUP-MAC.md). API and Bluetooth details: [docs/PROTOCOL.md](docs/PROTOCOL.md).

@@ -3,7 +3,7 @@
 # Device: nebuladeck.local, or NEBULADECK_HOST=<ip>.
 set -u
 URL="http://${NEBULADECK_HOST:-nebuladeck.local}/api"
-nd() { b='{}'; [ $# -gt 1 ] && b=$2; curl -s -m 3 -H 'Content-Type: application/json' -d "$b" "$URL/$1" >/dev/null || echo "no device at $URL"; }
+nd() { b='{}'; [ $# -gt 1 ] && b=$2; curl -4 -s -m 3 -H 'Content-Type: application/json' -d "$b" "$URL/$1" >/dev/null || echo "no device at $URL"; }
 
 echo "presence: chatting"
 nd presence '{"text":"Thinking...","new_turn":true}'; sleep 3
@@ -20,7 +20,7 @@ nd state '{"status":"working","title":"Refactoring the physics step","project":"
 echo "ask: tap an option on the screen (30 s)"
 nd ask '{"id":"demo","prompt":"Delete 12 unused files?","options":["Delete","Show list","Skip"],"timeout":30}'
 for _ in $(seq 32); do
-  a=$(curl -s -m 3 "$URL/answer?id=demo"); [ "$a" = pending ] || break; sleep 1
+  a=$(curl -4 -s -m 3 "$URL/answer?id=demo"); [ "$a" = pending ] || break; sleep 1
 done
 echo "answer: ${a:-<none>}"
 

@@ -144,7 +144,7 @@
     <div class="card" id="doneCard" hidden>
       <h2>3 · You're online</h2>
       <p>Your NebulaDeck is on <strong id="doneSsid"></strong> at <code id="doneHost">nebuladeck.local</code> (<code id="doneIp"></code>). In a few seconds it switches to “Agent not connected”.</p>
-      <p>Check it from your computer with <code>curl http://nebuladeck.local/api/info</code>, then
+      <p>Check it from your computer with <code>curl -4 http://nebuladeck.local/api/info</code>, then
         <a href="#" id="toAgent">set up your agent</a>.</p>
       <p><small>If <code>nebuladeck.local</code> doesn't resolve on your computer, use the IP instead: <code id="useCmd">export NEBULADECK_HOST=IP</code>. To change network later, hold the screen for 5 seconds.</small></p>
     </div>
@@ -210,7 +210,7 @@
     <div class="card">
       <h2>Other agents</h2>
       <p>Anything that can run <code>curl</code> can drive the screen. Paste this into your agent's instructions (AGENTS.md, rules, system prompt):</p>
-      <div class="copy"><button data-copy="agentsSnippet">Copy</button><pre class="wrap" id="agentsSnippet">A NebulaDeck status screen is on my local network at http://nebuladeck.local/api (JSON over HTTP, use curl -m 3, ignore failures).
+      <div class="copy"><button data-copy="agentsSnippet">Copy</button><pre class="wrap" id="agentsSnippet">A NebulaDeck status screen is on my local network at http://nebuladeck.local/api (JSON over HTTP, use curl -4 -m 3, ignore failures; -4 avoids a 5 s IPv6 lookup).
 - Starting a multi-step task: POST /api/state {"status":"working","title":"...","project":"..."}
 - Milestones: POST /api/msg {"text":"...","level":"info|warn|error"}
 - Need a decision: POST /api/ask {"id":"q1","prompt":"...","options":["Yes","No"],"timeout":120}, then poll GET /api/answer?id=q1 every second until it is not "pending" ("answered:&lt;option&gt;" or "cancelled"; then ask in chat)

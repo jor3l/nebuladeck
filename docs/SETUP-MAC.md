@@ -22,7 +22,7 @@ serial device. Override with `make flash PORT=/dev/cu.usbmodemXXXX`. Local build
 
 You only flash over USB once. Released firmware updates itself over WiFi: when a newer
 build of its channel exists, the screen offers **Update** / **Skip**. You can also tap the logo →
-**Check updates**, or `curl -X POST http://nebuladeck.local/api/update`.
+**Check updates**, or `curl -4 -X POST http://nebuladeck.local/api/update`.
 
 ## 2. Connect it to WiFi
 
@@ -42,7 +42,7 @@ or hold the screen for 5 seconds. The old network is kept until a new one works.
 Check it from the Mac:
 
 ```bash
-curl -s http://nebuladeck.local/api/info
+curl -4 -s http://nebuladeck.local/api/info
 ```
 
 If `nebuladeck.local` doesn't resolve (some routers block mDNS), use the IP shown on the screen and
@@ -60,12 +60,12 @@ make install        # links skill/ into ~/.claude/skills/nebuladeck
 
 ```bash
 H=http://nebuladeck.local/api; J='Content-Type: application/json'
-curl -s -H "$J" -d '{"status":"working","title":"Testing the screen","progress":0.4}' $H/state
-curl -s -H "$J" -d '{"text":"Hello from the terminal"}' $H/msg
-curl -s -H "$J" -d '{"id":"t1","prompt":"Ship it?","options":["Yes","No"],"timeout":60}' $H/ask
-curl -s "$H/answer?id=t1"        # tap a button, then run again: answered:Yes
-curl -s -H "$J" -d '{"summary":"All good","tokens_in":48210,"tokens_out":9320}' $H/done
-curl -s -X POST $H/bye             # back to the nebula
+curl -4 -s -H "$J" -d '{"status":"working","title":"Testing the screen","progress":0.4}' $H/state
+curl -4 -s -H "$J" -d '{"text":"Hello from the terminal"}' $H/msg
+curl -4 -s -H "$J" -d '{"id":"t1","prompt":"Ship it?","options":["Yes","No"],"timeout":60}' $H/ask
+curl -4 -s "$H/answer?id=t1"        # tap a button, then run again: answered:Yes
+curl -4 -s -H "$J" -d '{"summary":"All good","tokens_in":48210,"tokens_out":9320}' $H/done
+curl -4 -s -X POST $H/bye             # back to the nebula
 ```
 
 Touch the nebula to make ripples; tap the logo for device info. `make demo` walks through every screen.
