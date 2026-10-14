@@ -65,6 +65,8 @@ jobs:
       - name: Replace the dev prerelease
         run: |
           gh release delete dev --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes || true
+          # The tag can outlive a release deleted by hand; drop it so the new one points at this commit.
+          gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/dev" 2>/dev/null || true
           gh release create dev dist/*.bin --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
             --prerelease --latest=false --title "${{ needs.build.outputs.version }}" \
             --notes "Rolling dev build of ${GITHUB_SHA::7}. Not for general use: stable releases are tagged vX.Y.Z."

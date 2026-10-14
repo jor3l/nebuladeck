@@ -33,10 +33,11 @@ jobs:
       - name: Fetch latest and dev images
         run: |
           for ch in latest dev; do
+            # A missing channel (none released yet, or deleted) is skipped; the page shows "none yet".
             if [ $ch = latest ]; then tag=$(gh release view --json tagName -q .tagName 2>/dev/null || true)
             else tag=dev; fi
-            [ -n "$tag" ] || { echo "no $ch release yet"; continue; }
-            name=$(gh release view "$tag" --json name -q .name)
+            name=$( [ -n "$tag" ] && gh release view "$tag" --json name -q .name 2>/dev/null || true)
+            [ -n "$name" ] || { echo "no $ch release, skipping"; continue; }
             mkdir -p "site/$ch"
             gh release download "$tag" -p nebuladeck-sc01plus.bin -D "site/$ch"
             sed -e "s/\"version\": \"none\"/\"version\": \"$name\"/" \
