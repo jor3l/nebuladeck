@@ -91,7 +91,7 @@ bool Ui::begin() {
 
 void Ui::reset() {
   project = ""; title = ""; status = ST_IDLE; progress = -1;
-  nmsg = 0; asking = false; nopts = 0;
+  nmsg = 0; asking = false; nopts = 0; completed = false;
 }
 
 void Ui::pushMsg(const String& text, uint8_t level, uint32_t ttl, uint32_t now) {
@@ -116,13 +116,17 @@ int Ui::hitAsk(int px, int py) const {
   return -1;
 }
 
+static void nebulaHeader(LGFX_Sprite& fb, Nebula& nebula, uint32_t now) {
+  nebula.draw(fb, now / 1000.0f);
+  fb.setFont(&fonts::FreeSansBold9pt7b);
+  fb.setTextColor(fb.color565(150, 160, 210));
+  centerText(fb, "N E B U L A D E C K", W / 2, 44);
+}
+
 void Ui::drawIdle(uint32_t now) {
   float t = now / 1000.0f;
-  nebula_.draw(fb_, t);
+  nebulaHeader(fb_, nebula_, now);
   float pulse = 0.5f + 0.5f * sinf(t * 1.4f);
-  fb_.setFont(&fonts::FreeSansBold9pt7b);
-  fb_.setTextColor(fb_.color565(150, 160, 210));
-  centerText(fb_, "N E B U L A D E C K", W / 2, 44);
 
   int b = 150 + (int)(pulse * 105);
   fb_.setFont(&fonts::FreeSans12pt7b);
@@ -131,6 +135,70 @@ void Ui::drawIdle(uint32_t now) {
   fb_.setFont(&fonts::FreeSans9pt7b);
   fb_.setTextColor(fb_.color565(120, 130, 180));
   centerText(fb_, "waiting for host", W / 2, H / 2 + 30);
+}
+
+static String compact(uint32_t n) {
+  if (n < 1000) return String(n);
+  if (n < 100000) return String(n / 1000.0f, 1) + "k";
+  if (n < 1000000) return String(n / 1000) + "k";
+  return String(n / 1000000.0f, 2) + "M";
+}
+
+void Ui::drawDone(uint32_t now) {
+  float t = now / 1000.0f;
+  nebulaHeader(fb_, nebula_, now);
+  uint16_t green = fb_.color565(70, 220, 140);
+
+  // Check mark in a ring.
+  int cx = W / 2, cy = 120;
+  fb_.fillCircle(cx, cy, 38, fb_.color565(8, 30, 28));
+  fb_.drawCircle(cx, cy, 38, green);
+  fb_.drawCircle(cx, cy, 37, green);
+  fb_.drawWideLine(cx - 15, cy + 1, cx - 4, cy + 13, 6, green);
+  fb_.drawWideLine(cx - 4, cy + 13, cx + 17, cy - 12, 6, green);
+
+  // Completion message.
+  fb_.setTextDatum(top_center);
+  fb_.setFont(&fonts::FreeSansBold12pt7b);
+  fb_.setTextColor(fb_.color565(240, 243, 255));
+  wrapText(fb_, summary.length() ? summary : "Task completed", W / 2, 180, W - 50, 28, 4);
+  fb_.setTextDatum(top_left);
+
+  // Agent idle.
+  int pr = 4 + (int)(1.5f * (0.5f + 0.5f * sinf(t * 2.0f)));
+  fb_.fillCircle(W / 2 - 52, 318, pr, fb_.color565(120, 130, 180));
+  fb_.setFont(&fonts::FreeSans9pt7b);
+  fb_.setTextColor(fb_.color565(150, 160, 210));
+  fb_.setTextDatum(middle_left);
+  fb_.drawString("Agent idle", W / 2 - 36, 317);
+  fb_.setTextDatum(top_left);
+
+  // Floating token card.
+  int x = 16, y = 358, w = W - 32, h = 98;
+  fb_.fillRoundRect(x + 2, y + 6, w - 4, h, 18, fb_.color565(1, 2, 8));  // shadow
+  fb_.fillRoundRect(x, y, w, h, 18, fb_.color565(14, 17, 40));
+  fb_.drawRoundRect(x, y, w, h, 18, fb_.color565(46, 56, 112));
+  fb_.setFont(&fonts::FreeSansBold9pt7b);
+  fb_.setTextColor(fb_.color565(100, 110, 160));
+  fb_.drawString("TOKENS", x + 20, y + 12);
+  if (durationS >= 0) {
+    fb_.setTextDatum(top_right);
+    fb_.drawString(ago((uint32_t)durationS * 1000UL), x + w - 20, y + 12);
+    fb_.setTextDatum(top_left);
+  }
+  fb_.drawFastVLine(W / 2, y + 40, 44, fb_.color565(46, 56, 112));
+  const char* labels[2] = {"IN", "OUT"};
+  uint32_t vals[2] = {tokIn, tokOut};
+  uint16_t cols[2] = {fb_.color565(60, 200, 255), fb_.color565(255, 130, 200)};
+  for (int i = 0; i < 2; i++) {
+    int mx = i == 0 ? W / 4 + 8 : 3 * W / 4 - 8;
+    fb_.setFont(&fonts::FreeSansBold18pt7b);
+    fb_.setTextColor(cols[i]);
+    centerText(fb_, compact(vals[i]), mx, y + 56);
+    fb_.setFont(&fonts::FreeSans9pt7b);
+    fb_.setTextColor(fb_.color565(120, 130, 180));
+    centerText(fb_, labels[i], mx, y + 84);
+  }
 }
 
 void Ui::drawStatus(uint32_t now) {
@@ -213,6 +281,7 @@ void Ui::drawFrame(bool connected, uint32_t now) {
   for (int i = nmsg - 1; i >= 0; i--)
     if (msgs[i].ttl && now - msgs[i].at > msgs[i].ttl * 1000UL) nmsg = i;  // oldest expire first
   if (!connected) drawIdle(now);
+  else if (completed && !asking) drawDone(now);
   else {
     drawStatus(now);
     if (asking) drawAsk(now);

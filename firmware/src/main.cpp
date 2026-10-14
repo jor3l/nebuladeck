@@ -29,7 +29,7 @@ void loop() {
   int32_t x, y;
   bool touching = lcd.getTouch(&x, &y);
   bool conn = proto.connected(now);
-  if (touching && !conn) {
+  if (touching && ui.onNebula(conn)) {
     // Ripple on press, then a trail while dragging.
     static int32_t lx = -100, ly = -100;
     static uint32_t lastRip = 0;
@@ -39,7 +39,7 @@ void loop() {
       lx = x; ly = y; lastRip = now;
     }
   }
-  if (touching && !down && conn) {
+  if (touching && !down && ui.asking) {
     int c = ui.hitAsk(x, y);
     if (c >= 0) {
       proto.sendTap(ui.askId, c, ui.opts[c]);

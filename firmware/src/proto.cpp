@@ -42,6 +42,7 @@ void Proto::handle(const String& line, uint32_t now) {
     Serial.println("{\"t\":\"pong\"}");
   } else if (!strcmp(t, "state")) {
     lastPing_ = now;
+    ui_.completed = false;
     if (doc["project"].is<const char*>()) ui_.project = doc["project"].as<const char*>();
     if (doc["title"].is<const char*>()) ui_.title = doc["title"].as<const char*>();
     if (doc["status"].is<const char*>()) ui_.status = parseStatus(doc["status"]);
@@ -54,8 +55,18 @@ void Proto::handle(const String& line, uint32_t now) {
     ui_.nopts = 0;
     for (JsonVariant o : doc["options"].as<JsonArray>())
       if (ui_.nopts < Ui::MAXOPT) ui_.opts[ui_.nopts++] = o.as<String>();
+    ui_.completed = false;
     ui_.asking = ui_.nopts > 0;
     if (ui_.asking) ui_.status = ST_WAITING;
+  } else if (!strcmp(t, "done")) {
+    lastPing_ = now;
+    ui_.completed = true;
+    ui_.asking = false;
+    ui_.status = ST_DONE;
+    ui_.summary = doc["summary"] | "";
+    ui_.tokIn = doc["tokens_in"].as<uint32_t>();
+    ui_.tokOut = doc["tokens_out"].as<uint32_t>();
+    ui_.durationS = doc["duration"].is<int>() ? doc["duration"].as<int>() : -1;
   } else if (!strcmp(t, "bye")) {
     ui_.reset();
     lastPing_ = 0;  // straight back to the nebula
