@@ -5,3 +5,6 @@
 build/
 dist/
 node_modules/
+
+# Claude Code worktrees (other sessions working in this repo)
+.claude/worktrees/
