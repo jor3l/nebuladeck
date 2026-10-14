@@ -57,7 +57,7 @@ void Nebula::draw(LovyanGFX& dst, float t) {
       buf_.drawPixel(x, y, lut_[i < 0 ? 0 : i > 255 ? 255 : i]);
     }
   }
-  buf_.pushRotateZoom(&dst, dst.width() / 2.0f, dst.height() / 2.0f, 0, ZOOM, ZOOM);
+  buf_.pushRotateZoomWithAA(&dst, dst.width() / 2.0f, dst.height() / 2.0f, 0, ZOOM, ZOOM);
 
   // Stars: fixed positions, slow twinkle.
   for (int i = 0; i < 46; i++) {

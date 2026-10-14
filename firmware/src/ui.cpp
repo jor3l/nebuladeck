@@ -68,6 +68,13 @@ static int wrapText(LovyanGFX& g, const String& s, int x, int y, int w, int lh, 
   return lines;
 }
 
+// Centers on the glyphs (cap height), not the font box, which sits low for FreeFonts.
+static void centerText(LovyanGFX& g, const String& s, int cx, int cy) {
+  g.setTextDatum(baseline_center);
+  g.drawString(s, cx, cy + (int)(g.fontHeight() * 0.31f));
+  g.setTextDatum(top_left);
+}
+
 static String ago(uint32_t ms) {
   uint32_t s = ms / 1000;
   if (s < 60) return String(s) + "s";
@@ -113,18 +120,17 @@ void Ui::drawIdle(uint32_t now) {
   float t = now / 1000.0f;
   nebula_.draw(fb_, t);
   float pulse = 0.5f + 0.5f * sinf(t * 1.4f);
-  fb_.setTextDatum(middle_center);
   fb_.setFont(&fonts::FreeSansBold9pt7b);
   fb_.setTextColor(fb_.color565(150, 160, 210));
-  fb_.drawString("N E B U L A D E C K", W / 2, 44);
+  centerText(fb_, "N E B U L A D E C K", W / 2, 44);
 
   int b = 150 + (int)(pulse * 105);
   fb_.setFont(&fonts::FreeSans12pt7b);
   fb_.setTextColor(fb_.color565(b, b, 255));
-  fb_.drawString("Agent not connected", W / 2, H / 2);
+  centerText(fb_, "Agent not connected", W / 2, H / 2);
   fb_.setFont(&fonts::FreeSans9pt7b);
   fb_.setTextColor(fb_.color565(120, 130, 180));
-  fb_.drawString("waiting for host", W / 2, H / 2 + 30);
+  centerText(fb_, "waiting for host", W / 2, H / 2 + 30);
 }
 
 void Ui::drawStatus(uint32_t now) {
@@ -197,10 +203,9 @@ void Ui::drawAsk(uint32_t) {
     optRect(nopts, i, x, y, w, h);
     uint16_t c = i == 0 ? fb_.color565(60, 200, 255) : fb_.color565(36, 44, 88);
     fb_.fillRoundRect(x, y, w, h, 14, c);
-    fb_.setTextDatum(middle_center);
     fb_.setFont(&fonts::FreeSansBold12pt7b);
     fb_.setTextColor(i == 0 ? fb_.color565(4, 12, 28) : fb_.color565(230, 235, 255));
-    fb_.drawString(opts[i], x + w / 2, y + h / 2);
+    centerText(fb_, opts[i], x + w / 2, y + h / 2);
   }
 }
 
