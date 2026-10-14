@@ -49,6 +49,7 @@ class Ui {
   String summary;
   uint32_t tokIn = 0, tokOut = 0;
   int32_t durationS = -1;  // <0 = unknown
+  uint32_t taskStart = 0;  // millis() when the current task began; activity is stamped relative to it
   NetInfo net;
   float hold = 0;  // long-press progress towards WiFi setup, 0-1
   // Firmware update: newer release tag, on-screen prompt, install progress.

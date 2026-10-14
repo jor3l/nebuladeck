@@ -185,6 +185,8 @@ int Api::apply(const char* t, JsonDocument& doc, JsonDocument& out, uint32_t now
   if (doc["agent"].is<const char*>() && strlen(doc["agent"]) <= 32) ui_.agent = doc["agent"].as<const char*>();
 
   if (!strcmp(t, "state")) {
+    // A task starts when we leave the presence/done screens (or the first state of a session).
+    if (ui_.completed || ui_.status == ST_IDLE || !ui_.taskStart) ui_.taskStart = now;
     ui_.completed = false;
     if (doc["project"].is<const char*>()) ui_.project = doc["project"].as<const char*>();
     if (doc["title"].is<const char*>()) ui_.title = doc["title"].as<const char*>();

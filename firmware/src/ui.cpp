@@ -406,10 +406,23 @@ void Ui::drawStatus(uint32_t now) {
     fb_.setFont(&fonts::FreeSans9pt7b);
     fb_.setTextColor(step ? fb_.color565(150, 158, 195) : fb_.color565(215, 222, 245));
     wrapText(fb_, step && msgs[i].count > 1 ? msgs[i].text + "  x" + String(msgs[i].count) : msgs[i].text, 30, y + 4, 232, 20, 2);
-    fb_.setTextDatum(top_right);
-    fb_.setTextColor(fb_.color565(100, 110, 160));
-    fb_.drawString(ago(now - msgs[i].at), 298, y + 4);
-    fb_.setTextDatum(top_left);
+    if (step) {
+      // In progress: three dots chasing each other, no timer.
+      for (int k = 0; k < 3; k++) {
+        float ph = 0.5f + 0.5f * sinf(t * 5.0f - k * 0.9f);
+        fb_.fillCircle(276 + k * 9, y + 12, 2 + (int)(ph * 1.5f), fb_.color565(80 + (int)(ph * 80), 60 + (int)(ph * 40), 140 + (int)(ph * 100)));
+      }
+    } else {
+      // Done events: when they happened, from the start of the task ("+2:14"). Fixed.
+      uint32_t s = (int32_t)(msgs[i].at - taskStart) > 0 ? (msgs[i].at - taskStart) / 1000 : 0;
+      char stamp[12];
+      if (s < 3600) snprintf(stamp, sizeof stamp, "+%u:%02u", (unsigned)(s / 60), (unsigned)(s % 60));
+      else snprintf(stamp, sizeof stamp, "+%uh%02u", (unsigned)(s / 3600), (unsigned)(s / 60 % 60));
+      fb_.setTextDatum(top_right);
+      fb_.setTextColor(fb_.color565(100, 110, 160));
+      fb_.drawString(stamp, 298, y + 4);
+      fb_.setTextDatum(top_left);
+    }
   }
 }
 
