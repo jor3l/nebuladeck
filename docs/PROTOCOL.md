@@ -139,6 +139,6 @@ the agent's own `msg` milestones. Set the label with
 H=http://nebuladeck.local/api; ID=q$RANDOM
 curl -4 -s -m 3 -H 'Content-Type: application/json' \
   -d "{\"id\":\"$ID\",\"prompt\":\"Ship it?\",\"options\":[\"Yes\",\"No\"],\"timeout\":120}" $H/ask
-for _ in $(seq 125); do a=$(curl -4 -s -m 3 "$H/answer?id=$ID"); [ "$a" = pending ] || break; sleep 1; done
+for _ in $(seq 125); do a=$(curl -4 -s -m 3 "$H/answer?id=$ID"); case "$a" in answered:*|cancelled) break;; esac; sleep 1; done
 echo "$a"   # answered:Yes | cancelled | empty (no screen)
 ```

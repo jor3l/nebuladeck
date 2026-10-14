@@ -20,7 +20,7 @@ nd state '{"status":"working","title":"Refactoring the physics step","project":"
 echo "ask: tap an option on the screen (30 s)"
 nd ask '{"id":"demo","prompt":"Delete 12 unused files?","options":["Delete","Show list","Skip"],"timeout":30}'
 for _ in $(seq 32); do
-  a=$(curl -4 -s -m 3 "$URL/answer?id=demo"); [ "$a" = pending ] || break; sleep 1
+  a=$(curl -4 -s -m 3 "$URL/answer?id=demo"); case "$a" in answered:*|cancelled) break;; esac; sleep 1
 done
 echo "answer: ${a:-<none>}"
 

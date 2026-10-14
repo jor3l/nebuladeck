@@ -41,9 +41,10 @@ are for real tasks.
    ```bash
    H="http://${NEBULADECK_HOST:-nebuladeck.local}/api"; ID=q$RANDOM
    curl -4 -s -m 3 -H 'Content-Type: application/json' -d "{\"agent\":\"Claude\",\"project\":\"<folder>\",\"id\":\"$ID\",\"prompt\":\"Delete 12 files?\",\"options\":[\"Delete\",\"Skip\"],\"timeout\":120}" "$H/ask" >/dev/null || echo unreachable
-   for _ in $(seq 125); do a=$(curl -4 -s -m 3 "$H/answer?id=$ID"); [ "$a" = pending ] || break; sleep 1; done; echo "$a"
+   for _ in $(seq 125); do a=$(curl -4 -s -m 3 "$H/answer?id=$ID"); case "$a" in answered:*|cancelled) break;; esac; sleep 1; done; echo "$a"
    ```
-   - Prints `answered:<option>`, or `cancelled` (nobody answered in time). Empty or `unreachable` = no screen.
+   - Prints `answered:<option>`, or `cancelled` (nobody answered in time). A failed poll (WiFi hiccup) just
+     retries; empty at the end or `unreachable` = no screen.
    - If it isn't `answered:...`, ask in the chat instead (the screen ask has already expired). Always set
      `timeout` so you never hang; ~120 s gives someone across the room time to look.
    - Max 4 options, keep each under ~16 characters. An ask already switches the screen to "needs you".

@@ -47,6 +47,34 @@ static void drawEdgeGlow(LGFX_Sprite& fb, uint8_t r, uint8_t g, uint8_t b, float
   }
 }
 
+// Like drawMask, scaled to `size` px (bilinear sampling of the n x n mask).
+static void drawMaskScaled(LGFX_Sprite& fb, const uint8_t* m, int n, int size, int cx, int cy, uint8_t r, uint8_t g, uint8_t b) {
+  auto* buf = (uint16_t*)fb.getBuffer();
+  int x0 = cx - size / 2, y0 = cy - size / 2, w = fb.width(), h = fb.height();
+  float k = (float)n / size;
+  for (int y = 0; y < size; y++) {
+    int py = y0 + y;
+    if (py < 0 || py >= h) continue;
+    float sy = (y + 0.5f) * k - 0.5f;
+    int iy = max(0, min(n - 2, (int)sy));
+    float fy = max(0.0f, min(1.0f, sy - iy));
+    for (int x = 0; x < size; x++) {
+      int px = x0 + x;
+      if (px < 0 || px >= w) continue;
+      float sx = (x + 0.5f) * k - 0.5f;
+      int ix = max(0, min(n - 2, (int)sx));
+      float fx = max(0.0f, min(1.0f, sx - ix));
+      const uint8_t* p = m + iy * n + ix;
+      int a = (int)((p[0] * (1 - fx) + p[1] * fx) * (1 - fy) + (p[n] * (1 - fx) + p[n + 1] * fx) * fy);
+      if (!a) continue;
+      uint16_t c = __builtin_bswap16(buf[py * w + px]);
+      int br = (c >> 8) & 0xF8, bg = (c >> 3) & 0xFC, bb = (c << 3) & 0xF8;
+      br += (r - br) * a / 255; bg += (g - bg) * a / 255; bb += (b - bb) * a / 255;
+      buf[py * w + px] = __builtin_bswap16(lgfx::color565(br, bg, bb));
+    }
+  }
+}
+
 // Logo for a known agent name ("Claude", "Codex", "Gemini CLI"...), or nullptr.
 // Cached: it's called every frame and only recomputed when the name changes.
 static const AgentIcon* iconFor(const String& agent) {
@@ -757,11 +785,11 @@ int Ui::cardOrder(int* idx) const {
 }
 
 // A card's height: the session's own content plus one row per running subagent.
-static const int SUB_ROW = 26;
+static const int SUB_ROW = 26, SUB_TOP = 10;  // row height; gap between the session's content and its rows
 int Ui::cardHeight(int i) const {
   int kids = 0;
   for (const Agent& c : agents) kids += c.used && c.sub.length() && parentOf(c) == i;
-  return CARD_H + (kids ? 4 + kids * SUB_ROW : 0);
+  return CARD_H + (kids ? SUB_TOP + kids * SUB_ROW + 10 : 0);  // 10: room under the last row
 }
 
 int Ui::hitCard(int px, int py) const {
@@ -847,17 +875,18 @@ void Ui::drawAgents(uint32_t now) {
 
     // Its running subagents, one compact row each: icon, name, a dot in the colour its status
     // word would have.
-    int ry = y + CARD_H + 4;
+    int ry = y + CARD_H + SUB_TOP;
     for (const Agent& c : agents) {
       if (!c.used || !c.sub.length() || parentOf(c) != idx[k]) continue;
-      fb_.drawFastHLine(x + 14, ry - 2, w - 28, fb_.color565(36, 34, 76));
+      fb_.drawFastHLine(x + 14, ry - SUB_TOP / 2, w - 28, fb_.color565(36, 34, 76));  // centred in the gap above the row
       int cy = ry + SUB_ROW / 2 - 1;
-      if (const AgentIcon* ic = iconFor(c.name)) drawMask(fb_, ic->small, ICON_SMALL, x + 26, cy, ic->r, ic->g, ic->b);
-      else fb_.fillCircle(x + 26, cy, 5, fb_.color565(PURPLE_R, PURPLE_G, PURPLE_B));
+      // A smaller icon than the session's (16 px vs 22).
+      if (const AgentIcon* ic = iconFor(c.name)) drawMaskScaled(fb_, ic->small, ICON_SMALL, 16, x + 26, cy, ic->r, ic->g, ic->b);
+      else fb_.fillCircle(x + 26, cy, 4, fb_.color565(PURPLE_R, PURPLE_G, PURPLE_B));
       fb_.setFont(&fonts::FreeSans9pt7b);
       fb_.setTextDatum(middle_left);
       fb_.setTextColor(fb_.color565(200, 206, 236));
-      fb_.drawString(fit(fb_, c.role.length() ? c.role : String("agent"), w - 90), x + 44, cy);
+      fb_.drawString(fit(fb_, c.role.length() ? c.role : String("agent"), w - 86), x + 40, cy);
       fb_.setTextDatum(top_left);
       bool cNeeds = c.needsYou();
       int r = cNeeds ? 5 + (int)(pulse * 1.5f) : 5;
