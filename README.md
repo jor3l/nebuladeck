@@ -1,7 +1,15 @@
 # NebulaDeck
 
+[![Latest release](https://img.shields.io/github/v/release/jor3l/nebuladeck?label=latest&color=a064ff)](https://github.com/jor3l/nebuladeck/releases/latest)
+[![Setup page](https://img.shields.io/badge/setup-jor3l.github.io%2Fnebuladeck-ff82c8)](https://jor3l.github.io/nebuladeck/)
+
 A small always-on touch screen on your desk that shows what your AI agents are doing, built on
 the **Panlee SC01 Plus** or the original **SC01** (3.5" 320×480 capacitive touch, standing upright).
+
+<p align="center"><img src="print/steps/4.jpg" alt="An assembled NebulaDeck on a desk" width="520"></p>
+
+New here? [Build one](#build-your-nebuladeck), follow the [quick start](#quick-start), then read the
+[user manual](docs/MANUAL.md) for everything the screen can do.
 
 ## Why
 
@@ -89,6 +97,31 @@ also draws more slowly than the Plus's parallel one.
 - To flash an SC01 Plus over USB, it may need download mode: jumper **BOOT** to **GND** on the DEBUG header and press **RST**
   (download mode), then remove the jumper and press RST again. Later updates go over WiFi.
 
+## Build your NebulaDeck
+
+A printed stand turns the board into a desk screen. Print it, then put it together in about five
+minutes with a screwdriver. The same guide is on the setup page:
+[Build your NebulaDeck](https://jor3l.github.io/nebuladeck/#/build).
+
+**What you need**
+
+| Qty | Part |
+|---|---|
+| 1 | Panlee **SC01 Plus** or **SC01**, in its case with the back cover off |
+| 4 | M3 × 5 mm self-tapping screws |
+| 1 | USB-C to USB-C cable, one end right-angled |
+| 1 | Printed stand: [3MF](print/nebuladeck-0.1.3mf) (print project) or [STL](print/nebuladeck-0.1.stl) |
+
+**Assembly**
+
+| | |
+|---|---|
+| <img src="print/steps/0.jpg" alt="The parts laid out" width="400"> | **1. Lay out the parts.** Take the back cover off the board's case and keep the front frame on: the stand screws into the frame's four corner posts. Have the cable, the four screws and the stand ready. |
+| <img src="print/steps/1.jpg" alt="The board next to the open side of the stand" width="400"> | **2. Line them up.** Put the board screen-down with its USB-C port towards the stand, and the stand's open side facing the board. The slot in the back of the stand lines up with the port. |
+| <img src="print/steps/2.jpg" alt="The cable plugged into the board and routed through the slot" width="400"> | **3. Plug in the cable.** Push the straight end of the cable through the slot from the inside, then plug the right-angle end into the board. Point the angled plug so the cable runs flat towards the slot. |
+| <img src="print/steps/3.jpg" alt="Screwing the stand onto the board" width="400"> | **4. Close it and screw it down.** Fold the stand onto the back of the board, making sure no cable is pinched at the edges. Drive the four screws through the stand's corners into the posts. Snug is enough: self-tapping screws strip plastic if overtightened. |
+| <img src="print/steps/4.jpg" alt="The finished NebulaDeck standing upright" width="400"> | **5. Stand it up and plug it in.** Turn it upright and plug the other end into your computer or a USB charger. Then flash it (below). |
+
 ## Quick start
 
 Everything happens on [jor3l.github.io/nebuladeck](https://jor3l.github.io/nebuladeck/):
@@ -104,7 +137,9 @@ Everything happens on [jor3l.github.io/nebuladeck](https://jor3l.github.io/nebul
    curl -4 -s -H 'Content-Type: application/json' -d '{"status":"working","title":"Hello"}' http://nebuladeck.local/api/state
    ```
 
-Full walkthrough: [docs/SETUP-MAC.md](docs/SETUP-MAC.md). API and Bluetooth details: [docs/PROTOCOL.md](docs/PROTOCOL.md).
+How to use the screen (questions, several agents, the logo menu, sleep, updates, troubleshooting):
+[docs/MANUAL.md](docs/MANUAL.md). Full walkthrough on a Mac: [docs/SETUP-MAC.md](docs/SETUP-MAC.md).
+API and Bluetooth details: [docs/PROTOCOL.md](docs/PROTOCOL.md).
 
 Tap the **NEBULADECK** logo for device info: version, network, IP, **Check updates**,
 **Forget WiFi** and **Turn screen off** (dark until you tap it; it keeps receiving updates meanwhile). Holding the screen for 5 seconds also opens WiFi setup.
@@ -121,8 +156,10 @@ Tap the **NEBULADECK** logo for device info: version, network, IP, **Check updat
 
 - `firmware/` PlatformIO + Arduino, LovyanGFX, NimBLE: screens, BLE WiFi setup, HTTP API, OTA
 - `skill/` the Claude Code skill (`SKILL.md`) and optional hooks (`hooks.json`); other agents' rules are generated on the setup page
-- `site/` the setup page (Bluetooth WiFi setup, web flasher, agent setup) on GitHub Pages
+- `site/` the setup page (Bluetooth WiFi setup, web flasher, agent setup, build guide) on GitHub Pages
+- `print/` the 3D-printable stand (3MF, STL) and assembly photos
 - `tools/demo.sh` drives every screen with curl (`make demo`)
+- `docs/MANUAL.md` user manual
 - `docs/PROTOCOL.md` HTTP API and Bluetooth setup service (source of truth)
 
 ## Contributing
