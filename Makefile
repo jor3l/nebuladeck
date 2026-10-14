@@ -28,10 +28,9 @@ run: flash monitor
 clean:
 	cd $(FW) && pio run -e sc01plus -t clean
 
-# Cycles the screen through every state (needs the board running the firmware).
+# Cycles the screen through every state via the CLI (the daemon owns the serial port).
 demo:
-	@test -n "$(PORT)" || { echo "No Espressif device found."; exit 1; }
-	$$(head -1 $$(which pio) | sed 's/^#!//') tools/demo.py $(PORT)
+	./tools/demo.sh
 
 # CLI on PATH + agent skill for Claude Code.
 install:
