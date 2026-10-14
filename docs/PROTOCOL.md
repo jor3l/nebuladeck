@@ -27,7 +27,15 @@ one JSON object per line (`\n`). Host and device both ignore unknown fields.
 | `tap` | `id`, `choice` (answer to an `ask`) |
 | `touch` | `x`, `y`, `kind` (raw event, opt-in) |
 
-## MCP tools (host)
+## CLI (host)
 
-`screen_set_state`, `screen_push_message`, `screen_complete` (summary + token totals), `screen_ask` (returns the tap),
-`screen_set_layout`, `screen_clear`, `screen_status`.
+Agents don't speak this protocol directly. The `nebuladeck` CLI talks to a local daemon that owns
+the serial port and the heartbeat:
+
+| Command | Sends |
+|---|---|
+| `nebuladeck state <status> "<title>" [--progress]` | `state` |
+| `nebuladeck msg "<text>" [--level] [--ttl]` | `msg` |
+| `nebuladeck ask "<prompt>" <opt>...` | `ask`, prints the `tap` answer |
+| `nebuladeck done "<summary>"` | `done` (token totals from the session transcript) |
+| `nebuladeck clear` / `bye` | `clear` / `bye` |
