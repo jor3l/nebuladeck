@@ -21,7 +21,7 @@ Without PlatformIO, use the prebuilt image from the GitHub Releases page instead
 (needs `esptool`: `pipx install esptool`). After step 2 below:
 
 ```bash
-nebuladeck flash            # latest release; or: nebuladeck flash --file nebuladeck-sc01plus.bin
+nebuladeck flash            # latest release (or use the web flasher on the project page); or: nebuladeck flash --file nebuladeck-sc01plus.bin
 ```
 
 ## 2. Install the CLI

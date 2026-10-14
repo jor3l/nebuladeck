@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NebulaDeck Flasher</title>
+<meta name="description" content="Flash NebulaDeck onto a Panlee SC01 Plus from your browser.">
+<script type="module" src="https://unpkg.com/esp-web-tools@10.1.1/dist/web/install-button.js?module"></script>
+<style>
+  :root {
+    --bg: #070914; --card: #10142b; --line: #262d5c; --text: #e6eaff; --dim: #8a93c9;
+    --accent: #3cc8ff; --accent2: #ff82c8;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; color: var(--text); background: var(--bg);
+    font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background-image:
+      radial-gradient(60% 40% at 20% 0%, rgba(112, 30, 140, .45), transparent 70%),
+      radial-gradient(50% 40% at 90% 30%, rgba(60, 200, 255, .18), transparent 70%);
+  }
+  main { max-width: 640px; margin: 0 auto; padding: 56px 16px 64px; }
+  .eyebrow { letter-spacing: .3em; font-size: 12px; font-weight: 700; color: var(--dim); }
+  h1 { font-size: 36px; line-height: 1.1; margin: 8px 0 12px; }
+  .lead { color: var(--dim); margin: 0 0 28px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 22px; margin-bottom: 16px; }
+  .card h2 { font-size: 13px; letter-spacing: .12em; text-transform: uppercase; color: var(--dim); margin: 0 0 12px; }
+  ol { margin: 0; padding-left: 20px; }
+  li { margin-bottom: 8px; }
+  .row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .version { color: var(--dim); font-size: 14px; }
+  button.flash {
+    font: inherit; font-weight: 700; color: #04101c; border: 0; cursor: pointer;
+    padding: 12px 22px; border-radius: 12px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+  }
+  .warn { display: none; border-color: #7a4a1e; color: #ffcf8a; }
+  code { background: #0b0e22; border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; font-size: 14px; }
+  a { color: var(--accent); }
+  small, .foot { color: var(--dim); font-size: 14px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">N E B U L A D E C K</div>
+  <h1>Flash your screen</h1>
+  <p class="lead">An always-on touch display for AI agents on the Panlee SC01 Plus. This page installs the latest firmware straight from your browser.</p>
+
+  <div class="card warn" id="nosupport">
+    This browser can't talk to USB serial devices. Use <strong>Chrome</strong> or <strong>Edge</strong> on a desktop.
+  </div>
+
+  <div class="card">
+    <h2>1 · Put the board in download mode</h2>
+    <ol>
+      <li>Unplug the board, then connect it with a USB-C <em>data</em> cable.</li>
+      <li>On the <strong>DEBUG</strong> header, jumper <code>BOOT</code> to <code>GND</code>.</li>
+      <li>Press <strong>RST</strong>. The screen may stay dark.</li>
+    </ol>
+    <p><small>If the board is already running NebulaDeck, the install may work without this. Try it first; if it can't connect, do the steps above.</small></p>
+  </div>
+
+  <div class="card">
+    <h2>2 · Install</h2>
+    <div class="row">
+      <esp-web-install-button manifest="manifest.json">
+        <button slot="activate" class="flash">Connect &amp; install</button>
+        <span slot="unsupported"></span>
+        <span slot="not-allowed"></span>
+      </esp-web-install-button>
+      <span class="version" id="version"></span>
+    </div>
+    <p><small>Pick the <code>usbmodem</code> / <code>Espressif</code> port in the browser dialog. Installing replaces whatever is on the board.</small></p>
+  </div>
+
+  <div class="card">
+    <h2>3 · Finish</h2>
+    <ol>
+      <li>Remove the <code>BOOT</code> jumper and press <strong>RST</strong>. You should see the nebula and “Agent not connected”.</li>
+      <li>Install the CLI so agents can use it: <code>npm i -g nebuladeck</code>, then <code>nebuladeck state working "Hello"</code>.</li>
+    </ol>
+  </div>
+
+  <p class="foot"><a href="https://github.com/jor3l/nebuladeck">Source &amp; docs on GitHub</a> · MIT licensed</p>
+</main>
+<script>
+  if (!('serial' in navigator)) document.getElementById('nosupport').style.display = 'block';
+  fetch('manifest.json').then(r => r.json()).then(m => {
+    document.getElementById('version').textContent = 'Latest: ' + m.version;
+  }).catch(() => {});
+</script>
+</body>
+</html>

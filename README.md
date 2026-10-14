@@ -50,6 +50,8 @@ host/  daemon + CLI (Node)  ──USB CDC serial, newline-delimited JSON──�
 
 ## Quick start
 
+**Web flasher** (Chrome/Edge, no tools needed): https://jor3l.github.io/nebuladeck/ (live once the repo is public and a release is tagged).
+
 See [docs/SETUP-MAC.md](docs/SETUP-MAC.md). In short: flash the firmware (`make flash` from source,
 or `nebuladeck flash` with a prebuilt release image), `make install`, then
 `nebuladeck state working "Hello"`.
