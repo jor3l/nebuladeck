@@ -35,6 +35,8 @@ class Ui {
   // Returns the tapped ask option, or -1.
   int hitAsk(int x, int y) const;
   void drawFrame(bool connected, uint32_t now);
+  // Touch on the idle nebula.
+  void ripple(int x, int y, uint32_t now) { nebula_.ripple(x, y, now / 1000.0f); }
 
  private:
   void drawIdle(uint32_t now);

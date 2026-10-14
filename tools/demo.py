@@ -17,6 +17,9 @@ def reader():
 threading.Thread(target=reader, daemon=True).start()
 send(t="hello", v=1)
 
+import atexit
+atexit.register(lambda: (send(t="bye"), s.flush()))
+
 def beat(sec):
     for _ in range(int(sec)):
         send(t="ping")
@@ -39,5 +42,6 @@ beat(5)
 send(t="state", status="error", title="Build failed: missing symbol in ui.cpp")
 send(t="msg", text="Build failed", level="error")
 beat(5)
-print("stopping pings: screen should return to the nebula in ~3 s")
-time.sleep(6)
+print("done: back to the nebula")
+send(t="bye")
+time.sleep(0.5)

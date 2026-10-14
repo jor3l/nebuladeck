@@ -56,6 +56,9 @@ void Proto::handle(const String& line, uint32_t now) {
       if (ui_.nopts < Ui::MAXOPT) ui_.opts[ui_.nopts++] = o.as<String>();
     ui_.asking = ui_.nopts > 0;
     if (ui_.asking) ui_.status = ST_WAITING;
+  } else if (!strcmp(t, "bye")) {
+    ui_.reset();
+    lastPing_ = 0;  // straight back to the nebula
   } else if (!strcmp(t, "clear")) {
     ui_.nmsg = 0;
   }

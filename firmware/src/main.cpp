@@ -28,7 +28,18 @@ void loop() {
   static bool down = false;
   int32_t x, y;
   bool touching = lcd.getTouch(&x, &y);
-  if (touching && !down) {
+  bool conn = proto.connected(now);
+  if (touching && !conn) {
+    // Ripple on press, then a trail while dragging.
+    static int32_t lx = -100, ly = -100;
+    static uint32_t lastRip = 0;
+    int32_t dx = x - lx, dy = y - ly;
+    if (!down || (dx * dx + dy * dy > 18 * 18 && now - lastRip > 90)) {
+      ui.ripple(x, y, now);
+      lx = x; ly = y; lastRip = now;
+    }
+  }
+  if (touching && !down && conn) {
     int c = ui.hitAsk(x, y);
     if (c >= 0) {
       proto.sendTap(ui.askId, c, ui.opts[c]);
@@ -41,6 +52,6 @@ void loop() {
   static uint32_t lastFrame = 0;
   if (now - lastFrame >= 40) {
     lastFrame = now;
-    ui.drawFrame(proto.connected(now), now);
+    ui.drawFrame(conn, now);
   }
 }

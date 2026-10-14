@@ -45,14 +45,35 @@ bool Nebula::begin() {
   return true;
 }
 
+void Nebula::ripple(int x, int y, float t) {
+  rip_[ripNext_] = {x / (float)ZOOM, y / (float)ZOOM, t, true};
+  ripNext_ = (ripNext_ + 1) % MAXRIP;
+}
+
 void Nebula::draw(LovyanGFX& dst, float t) {
   const float s = 0.045f;
+  // Live ripples: expanding ring plus a glow at the touch point, both fading out.
+  struct Live { float x, y, r, amp; } live[MAXRIP];
+  int nlive = 0;
+  for (auto& r : rip_) {
+    float age = t - r.t0;
+    if (!r.on) continue;
+    if (age > LIFE) { r.on = false; continue; }
+    float fade = 1.0f - age / LIFE;
+    live[nlive++] = {r.x, r.y, age * 34.0f, fade * fade};
+  }
   for (int y = 0; y < H; y++) {
     for (int x = 0; x < W; x++) {
       float px = x * s, py = y * s;
       float q = fbm2(px + t * 0.05f, py - t * 0.03f);
       float v = fbm3(px + 3.2f * q - t * 0.04f, py + 3.2f * q + t * 0.02f);
       v = (v - 0.18f) * 1.55f;
+      for (int k = 0; k < nlive; k++) {
+        float dx = x - live[k].x, dy = y - live[k].y;
+        float d = sqrtf(dx * dx + dy * dy);
+        float u = (d - live[k].r) * (1.0f / 3.0f);
+        v += live[k].amp * (0.6f / (1.0f + u * u) + 0.5f / (1.0f + d * d * 0.05f));
+      }
       int i = (int)(v * 255.0f);
       buf_.drawPixel(x, y, lut_[i < 0 ? 0 : i > 255 ? 255 : i]);
     }
