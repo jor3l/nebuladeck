@@ -100,7 +100,14 @@ void Api::begin() {
     else return sendError(400, "unknown event");
     in["agent"] = server.hasArg("agent") ? server.arg("agent") : "Claude";  // the hook format is Claude Code's
     out["ok"] = true;
-    apply(t, in, out, millis());
+    uint32_t now = millis();
+    apply(t, in, out, now);
+    // During a task, tool steps also go into the card's activity list (without the "...").
+    if (ev == "PreToolUse" && !ui_.completed && ui_.status != ST_IDLE) {
+      String step = in["text"].as<String>();
+      if (step.endsWith("...")) step.remove(step.length() - 3);
+      ui_.pushStep(step, now);
+    }
     send(200, out);
   });
   server.onNotFound([this] { route(); });
@@ -196,6 +203,9 @@ int Api::apply(const char* t, JsonDocument& doc, JsonDocument& out, uint32_t now
     ui_.askPrompt = doc["prompt"] | "";
     ui_.nopts = 0;
     for (JsonVariant o : opts) ui_.opts[ui_.nopts++] = o.as<String>();
+    // A question asked outside a task returns to the presence screen afterwards, not to an
+    // empty "Working" card.
+    if (ui_.status != ST_WAITING) beforeAsk_ = ui_.completed ? ST_IDLE : ui_.status;
     ui_.completed = false;
     ui_.asking = true;
     ui_.status = ST_WAITING;
@@ -228,7 +238,7 @@ int Api::apply(const char* t, JsonDocument& doc, JsonDocument& out, uint32_t now
 
 void Api::cancelAsk() {
   if (askState_ == ASK_PENDING) askState_ = ASK_CANCELLED;
-  if (ui_.asking && ui_.status == ST_WAITING) ui_.status = ST_WORKING;
+  if (ui_.asking && ui_.status == ST_WAITING) ui_.status = beforeAsk_;
   ui_.asking = false;
 }
 
@@ -238,5 +248,5 @@ void Api::answer(int choice) {
   askChoice_ = choice;
   askLabel_ = ui_.opts[choice];
   ui_.asking = false;
-  ui_.status = ST_WORKING;
+  if (ui_.status == ST_WAITING) ui_.status = beforeAsk_;
 }

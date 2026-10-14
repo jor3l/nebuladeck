@@ -30,6 +30,7 @@ class Api {
   Ui& ui_;
   uint32_t lastSeen_ = 0, askDeadline_ = 0;
   uint8_t askState_ = ASK_NONE;
+  uint8_t beforeAsk_ = 0;  // status to return to once the ask is answered or cancelled
   int askChoice_ = -1;
   String askLabel_;
 };

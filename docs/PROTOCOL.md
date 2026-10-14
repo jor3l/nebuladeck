@@ -55,7 +55,8 @@ the screen returns to the idle nebula ("Agent not connected"), and a new session
 | `POST /api/update` | | Install the newer release in `update` (409 if none). The device shows progress and reboots |
 | `POST /api/wifi/forget` | | Erase the saved network and show the setup QR |
 
-An ask also ends when its `timeout` passes, when `done`/`bye` arrives, or when the session expires.
+When an ask ends, the screen returns to what it showed before (a question asked outside a
+task goes back to the presence screen). An ask also ends when its `timeout` passes, when `done`/`bye` arrives, or when the session expires.
 It is answered only by a tap on the screen.
 
 ```bash
@@ -93,7 +94,9 @@ is not sent. For `PreToolUse`, `sed` pulls out only `tool_name` and sends it as 
 | `Stop` | "Ready", closes a task card left open |
 | `SessionEnd` | `bye` |
 
-An explicit task (`state working`) takes over the screen while it runs. Set the label with
+An explicit task (`state working`) takes over the screen while it runs; during a task,
+`PreToolUse` steps also appear in its activity list as one dim line ("Editing x3"), under
+the agent's own `msg` milestones. Set the label with
 `&agent=Name` (default "Claude").
 
 ## Asking from a shell

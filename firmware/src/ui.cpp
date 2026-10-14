@@ -185,8 +185,21 @@ void Ui::reset() {
 
 void Ui::pushMsg(const String& text, uint8_t level, uint32_t ttl, uint32_t now) {
   for (int i = MAXMSG - 1; i > 0; i--) msgs[i] = msgs[i - 1];
-  msgs[0].text = text; msgs[0].level = level; msgs[0].at = now; msgs[0].ttl = ttl;
+  msgs[0].text = text; msgs[0].level = level; msgs[0].at = now; msgs[0].ttl = ttl; msgs[0].count = 1;
   if (nmsg < MAXMSG) nmsg++;
+}
+
+void Ui::pushStep(const String& text, uint32_t now) {
+  uint16_t count = 1;
+  for (int i = 0; i < nmsg; i++) {
+    if (msgs[i].level != LV_STEP) continue;
+    if (msgs[i].text == text) count = msgs[i].count + 1;
+    for (int j = i; j < nmsg - 1; j++) msgs[j] = msgs[j + 1];  // at most one step line
+    nmsg--;
+    break;
+  }
+  pushMsg(text, LV_STEP, 0, now);
+  msgs[0].count = count;
 }
 
 // Bottom sheet geometry shared by drawing and hit-testing.
@@ -380,13 +393,19 @@ void Ui::drawStatus(uint32_t now) {
   fb_.setFont(&fonts::FreeSansBold9pt7b);
   fb_.setTextColor(fb_.color565(100, 110, 160));
   fb_.drawString("ACTIVITY", 20, 230);
+  if (!nmsg) {
+    fb_.setFont(&fonts::FreeSans9pt7b);
+    fb_.setTextColor(fb_.color565(80, 90, 130));
+    fb_.drawString("Steps and milestones show up here", 20, 258);
+  }
   for (int i = 0; i < nmsg && i < 4; i++) {
     int y = 254 + i * 54;
-    fb_.fillRoundRect(16, y, 288, 48, 10, fb_.color565(16, 20, 42));
-    fb_.fillRoundRect(16, y + 6, 4, 36, 2, levelColor(fb_, msgs[i].level));
+    bool step = msgs[i].level == LV_STEP;
+    fb_.fillRoundRect(16, y, 288, 48, 10, step ? fb_.color565(11, 14, 30) : fb_.color565(16, 20, 42));
+    fb_.fillRoundRect(16, y + 6, 4, 36, 2, step ? fb_.color565(PURPLE_R / 2, PURPLE_G / 2, PURPLE_B / 2) : levelColor(fb_, msgs[i].level));
     fb_.setFont(&fonts::FreeSans9pt7b);
-    fb_.setTextColor(fb_.color565(215, 222, 245));
-    wrapText(fb_, msgs[i].text, 30, y + 4, 232, 20, 2);
+    fb_.setTextColor(step ? fb_.color565(150, 158, 195) : fb_.color565(215, 222, 245));
+    wrapText(fb_, step && msgs[i].count > 1 ? msgs[i].text + "  x" + String(msgs[i].count) : msgs[i].text, 30, y + 4, 232, 20, 2);
     fb_.setTextDatum(top_right);
     fb_.setTextColor(fb_.color565(100, 110, 160));
     fb_.drawString(ago(now - msgs[i].at), 298, y + 4);

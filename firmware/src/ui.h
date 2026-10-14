@@ -4,7 +4,7 @@
 #include "nebula.h"
 
 enum Status : uint8_t { ST_IDLE, ST_WORKING, ST_WAITING, ST_DONE, ST_ERROR };
-enum Level : uint8_t { LV_INFO, LV_WARN, LV_ERROR };
+enum Level : uint8_t { LV_INFO, LV_WARN, LV_ERROR, LV_STEP };  // LV_STEP: a tool step from the hooks
 enum Tone : uint8_t { T_IDLE, T_BUSY, T_OK, T_ERR };
 enum UpdateCheck : uint8_t { UC_IDLE, UC_CHECKING, UC_CURRENT, UC_FAILED };
 
@@ -24,6 +24,7 @@ struct Msg {
   uint8_t level = LV_INFO;
   uint32_t at = 0;
   uint32_t ttl = 0;  // seconds, 0 = stays
+  uint16_t count = 1;  // LV_STEP: repeats of the same step
 };
 
 class Ui {
@@ -64,6 +65,8 @@ class Ui {
   bool begin();
   void reset();
   void pushMsg(const String& text, uint8_t level, uint32_t ttl, uint32_t now);
+  // A hook-reported tool step during a task: one line on top, repeats counted ("Editing x3").
+  void pushStep(const String& text, uint32_t now);
   // Returns the tapped ask option, or -1.
   int hitAsk(int x, int y) const;
   bool hitCancel(int x, int y) const;
