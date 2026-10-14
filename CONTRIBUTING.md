@@ -10,6 +10,19 @@ Issues and PRs welcome. The project is small; keep changes focused.
 - `docs/PROTOCOL.md` HTTP API, BLE setup service and OTA rules. Update it with any change to either side.
 - `tools/demo.sh` drives the screen through every state with curl (`make demo`).
 
+## Tests
+
+Every bug fixed here gets a test, so it stays fixed.
+
+- `make test`: no hardware. `tests/test_hooks.py` runs every hook in `skill/hooks.json` against a fake
+  device on localhost; `tests/test_page.py` drives the setup page in headless Chrome with a fake
+  NebulaDeck behind Web Bluetooth. CI runs both before any Pages deploy.
+- `make e2e`: `tests/test_device.py` against your real device (`NEBULADECK_HOST`, default
+  `nebuladeck.local`). It uses its own `E2E-*` agents and cleans up. Run it after flashing.
+
+Python standard library only (plus `curl` and Chrome). On macOS the device tests go through `curl`,
+since Local Network privacy can block Python's own sockets.
+
 ## Guidelines
 
 - Firmware: keep the render loop light. Draw into the shared framebuffer, no per-frame allocation.

@@ -27,29 +27,62 @@ struct Msg {
   uint16_t count = 1;  // LV_STEP: repeats of the same step
 };
 
-class Ui {
- public:
-  static constexpr int MAXMSG = 6;
-  static constexpr int MAXOPT = 4;
+enum AskState : uint8_t { ASK_NONE, ASK_PENDING, ASK_ANSWERED, ASK_CANCELLED };
 
-  // Content (set by the protocol layer).
-  String project, title;
+// One connected agent, identified by name + project (e.g. "Claude" in "nebuladeck"). The
+// device keeps each one's status, task, activity history, question and summary by itself.
+struct Agent {
+  static constexpr int MAXMSG = 12;
+  static constexpr int MAXOPT = 4;
+  bool used = false;
+  String name, project;
+  uint32_t lastSeen = 0;  // millis() of its last request; the lease runs from here
+  // Task.
+  String title;
   uint8_t status = ST_IDLE;
-  float progress = -1;  // <0 = none
-  Msg msgs[MAXMSG];     // newest first
+  float progress = -1;     // <0 = none
+  uint32_t taskStart = 0;  // millis() when the current task began; activity is stamped relative to it
+  Msg msgs[MAXMSG];        // newest first
   int nmsg = 0;
+  // Question.
   bool asking = false;
   String askId, askPrompt, opts[MAXOPT];
   int nopts = 0;
-  // Presence (connected, no task): agent name + secondary text on the nebula.
-  String agent = "Claude", presence;
+  uint8_t askState = ASK_NONE, beforeAsk = ST_IDLE;  // status to return to afterwards
+  uint32_t askDeadline = 0;
+  String askLabel;
+  int askChoice = -1;
+  // Presence (no task): secondary line on the nebula.
+  String presence;
   bool attn = false;
-  // Completed task: shown on the nebula as "Agent idle" with a token card.
+  // Finished task: summary and token card.
   bool completed = false;
   String summary;
   uint32_t tokIn = 0, tokOut = 0;
   int32_t durationS = -1;  // <0 = unknown
-  uint32_t taskStart = 0;  // millis() when the current task began; activity is stamped relative to it
+
+  void clear();
+  void pushMsg(const String& text, uint8_t level, uint32_t ttl, uint32_t now);
+  // A hook-reported tool step during a task: one line on top, repeats counted ("Editing x3").
+  void pushStep(const String& text, uint32_t now);
+  bool needsYou() const { return asking || attn; }
+  // What the agent is doing, in one line (for its card in the list).
+  String line() const;
+};
+
+class Ui {
+ public:
+  static constexpr int MAXAGENTS = 6;
+  static constexpr int MAXOPT = Agent::MAXOPT;
+
+  Agent agents[MAXAGENTS];
+  int focus = -1;   // with several agents: the one opened from its card, -1 = the card list
+  int scroll = 0;   // card list scroll offset, px
+  int count() const;
+  // The agent the detail screens show: the only one, or the focused one. nullptr = card list.
+  Agent* view();
+  const Agent* view() const;
+  bool anyNeedsYou() const;
   NetInfo net;
   float hold = 0;  // long-press progress towards WiFi setup, 0-1
   // Firmware update: newer release tag, on-screen prompt, install progress.
@@ -64,10 +97,11 @@ class Ui {
 
   explicit Ui(LGFX_Device& lcd) : lcd_(lcd), fb_(&lcd), qr_(&lcd) {}
   bool begin();
-  void reset();
-  void pushMsg(const String& text, uint8_t level, uint32_t ttl, uint32_t now);
-  // A hook-reported tool step during a task: one line on top, repeats counted ("Editing x3").
-  void pushStep(const String& text, uint32_t now);
+  // Card list (2+ agents): the card at a point (index into agents[]), or -1; scroll bounds.
+  int hitCard(int x, int y) const;
+  int maxScroll() const;
+  // "‹ All agents" on an opened agent's screens.
+  bool hitBack(int x, int y) const { return count() > 1 && focus >= 0 && x > W_ - 140 && y < 44; }
   // Returns the tapped ask option, or -1.
   int hitAsk(int x, int y) const;
   bool hitCancel(int x, int y) const;
@@ -81,7 +115,10 @@ class Ui {
   // Install progress, drawn straight to the panel (the main loop is blocked meanwhile).
   void drawUpdating();
   void drawFrame(bool connected, uint32_t now);
-  bool onNebula(bool connected) const { return net.setup || !connected || (!asking && (completed || status == ST_IDLE)); }
+  bool onNebula(bool connected) const {
+    const Agent* a = view();
+    return net.setup || !connected || !a || (!a->asking && (a->completed || a->status == ST_IDLE));
+  }
   // Touch on the idle nebula.
   void ripple(int x, int y, uint32_t now) { nebula_.ripple(x, y, now / 1000.0f); }
 
@@ -95,6 +132,8 @@ class Ui {
   void drawHold();
   void drawUpdatePrompt();
   void drawInfo(uint32_t now);
+  void drawAgents(uint32_t now);
+  void drawBack();
   static constexpr int W_ = 320;
 
   LGFX_Device& lcd_;

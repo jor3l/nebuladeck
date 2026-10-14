@@ -320,7 +320,7 @@ EOF</pre></div>
   // Instructions shared by every agent except Claude Code (which gets the skill).
   const instructions = (h, agent) => `## NebulaDeck status screen
 
-A NebulaDeck touch screen on my desk shows what you are doing, so I can look away while you work. It is on my local network at http://${h}/api and takes JSON over HTTP. Call it with \`curl -4 -s -m 3\`; if a call fails, carry on without it.${agent ? ` Include "agent":"${agent}" in every JSON body so the screen shows your name and logo.` : ''}
+A NebulaDeck touch screen on my desk shows what you are doing, so I can look away while you work. It is on my local network at http://${h}/api and takes JSON over HTTP. Call it with \`curl -4 -s -m 3\`; if a call fails, carry on without it.${agent ? ` Include "agent":"${agent}" and "project":"<folder name>" in every JSON body: the screen keeps each agent's work on its own card and shows your name and logo.` : ' Include "project":"<folder name>" in every JSON body so your work stays on its own card.'}
 
 - Starting a multi-step task: curl -4 -s -m 3 -H 'Content-Type: application/json' -d '{${agent ? `"agent":"${agent}",` : ''}"status":"working","title":"<what you are doing>","project":"<folder name>"}' http://${h}/api/state
 - When the phase changes: the same state call with a new title, optionally "progress": 0.0-1.0. For a milestone or problem: POST {"text":"<one line>","level":"info|warn|error"} to http://${h}/api/msg

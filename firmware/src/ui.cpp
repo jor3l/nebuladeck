@@ -177,19 +177,17 @@ bool Ui::begin() {
   return nebula_.begin();
 }
 
-void Ui::reset() {
-  project = ""; title = ""; status = ST_IDLE; progress = -1;
-  nmsg = 0; asking = false; nopts = 0; completed = false;
-  presence = ""; attn = false;
+void Agent::clear() {
+  *this = Agent();
 }
 
-void Ui::pushMsg(const String& text, uint8_t level, uint32_t ttl, uint32_t now) {
+void Agent::pushMsg(const String& text, uint8_t level, uint32_t ttl, uint32_t now) {
   for (int i = MAXMSG - 1; i > 0; i--) msgs[i] = msgs[i - 1];
   msgs[0].text = text; msgs[0].level = level; msgs[0].at = now; msgs[0].ttl = ttl; msgs[0].count = 1;
   if (nmsg < MAXMSG) nmsg++;
 }
 
-void Ui::pushStep(const String& text, uint32_t now) {
+void Agent::pushStep(const String& text, uint32_t now) {
   uint16_t count = 1;
   for (int i = 0; i < nmsg; i++) {
     if (msgs[i].level != LV_STEP) continue;
@@ -202,6 +200,34 @@ void Ui::pushStep(const String& text, uint32_t now) {
   msgs[0].count = count;
 }
 
+String Agent::line() const {
+  if (asking) return askPrompt;
+  if (attn) return presence.length() ? presence : String("Needs you");
+  if (completed) return summary.length() ? summary : String("Task completed");
+  if (status != ST_IDLE) return title.length() ? title : String("Working");
+  return presence.length() ? presence : String("Ready");
+}
+
+int Ui::count() const {
+  int n = 0;
+  for (const Agent& a : agents) n += a.used;
+  return n;
+}
+
+const Agent* Ui::view() const {
+  int n = count();
+  if (n == 1) for (const Agent& a : agents) if (a.used) return &a;
+  if (n > 1 && focus >= 0 && agents[focus].used) return &agents[focus];
+  return nullptr;
+}
+
+Agent* Ui::view() { return const_cast<Agent*>(static_cast<const Ui*>(this)->view()); }
+
+bool Ui::anyNeedsYou() const {
+  for (const Agent& a : agents) if (a.used && a.needsYou()) return true;
+  return false;
+}
+
 // Bottom sheet geometry shared by drawing and hit-testing.
 static int sheetTop(int nopts) { return H - (110 + nopts * 60 + 8); }
 static void optRect(int nopts, int i, int& x, int& y, int& w, int& h) {
@@ -209,10 +235,13 @@ static void optRect(int nopts, int i, int& x, int& y, int& w, int& h) {
 }
 
 int Ui::hitAsk(int px, int py) const {
-  if (!asking) return -1;
-  for (int i = 0; i < nopts; i++) {
+  const Agent* v = view();
+  if (!v) return -1;
+  const Agent& a = *v;
+  if (!a.asking) return -1;
+  for (int i = 0; i < a.nopts; i++) {
     int x, y, w, h;
-    optRect(nopts, i, x, y, w, h);
+    optRect(a.nopts, i, x, y, w, h);
     if (px >= x && px < x + w && py >= y && py < y + h) return i;
   }
   return -1;
@@ -246,29 +275,30 @@ void Ui::drawIdle(uint32_t now) {
 }
 
 void Ui::drawPresence(uint32_t now) {
+  const Agent& a = *view();
   float t = now / 1000.0f;
   nebulaHeader(fb_, nebula_, now);
-  uint16_t dot = attn ? fb_.color565(255, 190, 60) : fb_.color565(PURPLE_R, PURPLE_G, PURPLE_B);
-  float pulse = 0.5f + 0.5f * sinf(t * (attn ? 4.5f : 1.6f));
+  uint16_t dot = a.attn ? fb_.color565(255, 190, 60) : fb_.color565(PURPLE_R, PURPLE_G, PURPLE_B);
+  float pulse = 0.5f + 0.5f * sinf(t * (a.attn ? 4.5f : 1.6f));
   int cx = W / 2, cy = H / 2 - 36;
   // The screen edges breathe: purple, or amber when the agent needs you (the nebula turns amber too).
-  drawEdgeGlow(fb_, attn ? 255 : PURPLE_R, attn ? 170 : PURPLE_G, attn ? 50 : PURPLE_B,
-               attn ? 0.45f + 0.4f * pulse : 0.25f + 0.3f * pulse);
+  drawEdgeGlow(fb_, a.attn ? 255 : PURPLE_R, a.attn ? 170 : PURPLE_G, a.attn ? 50 : PURPLE_B,
+               a.attn ? 0.45f + 0.4f * pulse : 0.25f + 0.3f * pulse);
   // Known agents: their logo (on a softly darkened spot so it reads on any nebula). Others: a dot in a ring.
-  if (const AgentIcon* ic = iconFor(agent)) {
+  if (const AgentIcon* ic = iconFor(a.name)) {
     drawGlow(fb_, cx, cy, 30, 0, 0, 0, 0);
     drawMask(fb_, ic->big, ICON_BIG, cx, cy, ic->r, ic->g, ic->b);
   } else {
-    fb_.drawCircle(cx, cy, 22 + (int)(pulse * 10), attn ? fb_.color565(120, 90, 30) : fb_.color565(70, 40, 130));
+    fb_.drawCircle(cx, cy, 22 + (int)(pulse * 10), a.attn ? fb_.color565(120, 90, 30) : fb_.color565(70, 40, 130));
     fb_.fillCircle(cx, cy, 9 + (int)(pulse * 3), dot);
   }
 
   fb_.setFont(&fonts::FreeSansBold12pt7b);
   fb_.setTextColor(fb_.color565(240, 243, 255));
-  centerText(fb_, agent + " connected", W / 2, cy + 58);
+  centerText(fb_, a.name + " connected", W / 2, cy + 58);
 
   // Secondary line; a trailing "..." animates.
-  String text = presence.length() ? presence : "Ready";
+  String text = a.presence.length() ? a.presence : "Ready";
   bool busy = text.endsWith("...");
   if (busy) text.remove(text.length() - 3);
   int lum = busy ? 170 + (int)(pulse * 85) : 190;
@@ -293,6 +323,7 @@ static String compact(uint32_t n) {
 }
 
 void Ui::drawDone(uint32_t now) {
+  const Agent& a = *view();
   float t = now / 1000.0f;
   nebulaHeader(fb_, nebula_, now);
   uint16_t green = fb_.color565(70, 220, 140);
@@ -309,7 +340,7 @@ void Ui::drawDone(uint32_t now) {
   fb_.setTextDatum(top_center);
   fb_.setFont(&fonts::FreeSansBold12pt7b);
   fb_.setTextColor(fb_.color565(240, 243, 255));
-  wrapText(fb_, summary.length() ? summary : "Task completed", W / 2, 180, W - 50, 28, 4);
+  wrapText(fb_, a.summary.length() ? a.summary : "Task completed", W / 2, 180, W - 50, 28, 4);
   fb_.setTextDatum(top_left);
 
   // Agent idle.
@@ -322,7 +353,7 @@ void Ui::drawDone(uint32_t now) {
   fb_.setTextDatum(top_left);
 
   // Floating token card (only when the agent reported totals).
-  if (tokIn == 0 && tokOut == 0) return;
+  if (a.tokIn == 0 && a.tokOut == 0) return;
   int x = 16, y = 358, w = W - 32, h = 98;
   fb_.fillRoundRect(x + 2, y + 6, w - 4, h, 18, fb_.color565(1, 2, 8));  // shadow
   fb_.fillRoundRect(x, y, w, h, 18, fb_.color565(14, 17, 40));
@@ -330,14 +361,14 @@ void Ui::drawDone(uint32_t now) {
   fb_.setFont(&fonts::FreeSansBold9pt7b);
   fb_.setTextColor(fb_.color565(100, 110, 160));
   fb_.drawString("TOKENS", x + 20, y + 12);
-  if (durationS >= 0) {
+  if (a.durationS >= 0) {
     fb_.setTextDatum(top_right);
-    fb_.drawString(ago((uint32_t)durationS * 1000UL), x + w - 20, y + 12);
+    fb_.drawString(ago((uint32_t)a.durationS * 1000UL), x + w - 20, y + 12);
     fb_.setTextDatum(top_left);
   }
   fb_.drawFastVLine(W / 2, y + 40, 44, fb_.color565(46, 56, 112));
   const char* labels[2] = {"IN", "OUT"};
-  uint32_t vals[2] = {tokIn, tokOut};
+  uint32_t vals[2] = {a.tokIn, a.tokOut};
   uint16_t cols[2] = {fb_.color565(60, 200, 255), fb_.color565(255, 130, 200)};
   for (int i = 0; i < 2; i++) {
     int mx = i == 0 ? W / 4 + 8 : 3 * W / 4 - 8;
@@ -351,18 +382,19 @@ void Ui::drawDone(uint32_t now) {
 }
 
 void Ui::drawStatus(uint32_t now) {
+  const Agent& a = *view();
   float t = now / 1000.0f;
-  uint16_t sc = statusColor(fb_, status);
+  uint16_t sc = statusColor(fb_, a.status);
   fb_.fillScreen(fb_.color565(7, 9, 20));
   fb_.setTextDatum(top_left);
 
   // Header: live dot + project.
   int pr = 5 + (int)(2.0f * (0.5f + 0.5f * sinf(t * 3.0f)));
-  if (const AgentIcon* ic = iconFor(agent)) drawMask(fb_, ic->small, ICON_SMALL, 24, 26, ic->r, ic->g, ic->b);
+  if (const AgentIcon* ic = iconFor(a.name)) drawMask(fb_, ic->small, ICON_SMALL, 24, 26, ic->r, ic->g, ic->b);
   else fb_.fillCircle(24, 26, pr, fb_.color565(PURPLE_R, PURPLE_G, PURPLE_B));
   fb_.setFont(&fonts::FreeSansBold12pt7b);
   fb_.setTextColor(fb_.color565(230, 235, 255));
-  fb_.drawString(project.length() ? project : "NebulaDeck", 44, 12);
+  fb_.drawString(a.project.length() ? a.project : "NebulaDeck", 44, 12);
 
   // Hero card.
   fb_.fillRoundRect(16, 56, 288, 160, 16, fb_.color565(16, 20, 42));
@@ -370,17 +402,17 @@ void Ui::drawStatus(uint32_t now) {
   fb_.fillRoundRect(32, 74, 6, 16, 3, sc);
   fb_.setFont(&fonts::FreeSansBold9pt7b);
   fb_.setTextColor(sc);
-  fb_.drawString(statusLabel(status), 46, 72);
+  fb_.drawString(statusLabel(a.status), 46, 72);
   fb_.setFont(&fonts::FreeSansBold18pt7b);
   fb_.setTextColor(fb_.color565(240, 243, 255));
-  wrapText(fb_, title.length() ? title : "Ready", 32, 100, 256, 32, 3);
+  wrapText(fb_, a.title.length() ? a.title : "Ready", 32, 100, 256, 32, 3);
 
   // Progress / activity bar.
-  if (progress >= 0 || status == ST_WORKING) {
+  if (a.progress >= 0 || a.status == ST_WORKING) {
     int bx = 32, by = 198, bw = 256, bh = 6;
     fb_.fillRoundRect(bx, by, bw, bh, 3, fb_.color565(32, 38, 72));
-    if (progress >= 0) {
-      int fw = (int)(bw * min(progress, 1.0f));
+    if (a.progress >= 0) {
+      int fw = (int)(bw * min(a.progress, 1.0f));
       if (fw > 0) fb_.fillRoundRect(bx, by, max(fw, bh), bh, 3, sc);
     } else {
       int seg = 70;
@@ -393,19 +425,19 @@ void Ui::drawStatus(uint32_t now) {
   fb_.setFont(&fonts::FreeSansBold9pt7b);
   fb_.setTextColor(fb_.color565(100, 110, 160));
   fb_.drawString("ACTIVITY", 20, 230);
-  if (!nmsg) {
+  if (!a.nmsg) {
     fb_.setFont(&fonts::FreeSans9pt7b);
     fb_.setTextColor(fb_.color565(80, 90, 130));
     fb_.drawString("Steps and milestones show up here", 20, 258);
   }
-  for (int i = 0; i < nmsg && i < 4; i++) {
+  for (int i = 0; i < a.nmsg && i < 4; i++) {
     int y = 254 + i * 54;
-    bool step = msgs[i].level == LV_STEP;
+    bool step = a.msgs[i].level == LV_STEP;
     fb_.fillRoundRect(16, y, 288, 48, 10, step ? fb_.color565(11, 14, 30) : fb_.color565(16, 20, 42));
-    fb_.fillRoundRect(16, y + 6, 4, 36, 2, step ? fb_.color565(PURPLE_R / 2, PURPLE_G / 2, PURPLE_B / 2) : levelColor(fb_, msgs[i].level));
+    fb_.fillRoundRect(16, y + 6, 4, 36, 2, step ? fb_.color565(PURPLE_R / 2, PURPLE_G / 2, PURPLE_B / 2) : levelColor(fb_, a.msgs[i].level));
     fb_.setFont(&fonts::FreeSans9pt7b);
     fb_.setTextColor(step ? fb_.color565(150, 158, 195) : fb_.color565(215, 222, 245));
-    wrapText(fb_, step && msgs[i].count > 1 ? msgs[i].text + "  x" + String(msgs[i].count) : msgs[i].text, 30, y + 4, 232, 20, 2);
+    wrapText(fb_, step && a.msgs[i].count > 1 ? a.msgs[i].text + "  x" + String(a.msgs[i].count) : a.msgs[i].text, 30, y + 4, 232, 20, 2);
     if (step) {
       // In progress: three dots chasing each other, no timer.
       for (int k = 0; k < 3; k++) {
@@ -414,7 +446,7 @@ void Ui::drawStatus(uint32_t now) {
       }
     } else {
       // Done events: when they happened, from the start of the task ("+2:14"). Fixed.
-      uint32_t s = (int32_t)(msgs[i].at - taskStart) > 0 ? (msgs[i].at - taskStart) / 1000 : 0;
+      uint32_t s = (int32_t)(a.msgs[i].at - a.taskStart) > 0 ? (a.msgs[i].at - a.taskStart) / 1000 : 0;
       char stamp[12];
       if (s < 3600) snprintf(stamp, sizeof stamp, "+%u:%02u", (unsigned)(s / 60), (unsigned)(s % 60));
       else snprintf(stamp, sizeof stamp, "+%uh%02u", (unsigned)(s / 3600), (unsigned)(s / 60 % 60));
@@ -427,22 +459,23 @@ void Ui::drawStatus(uint32_t now) {
 }
 
 void Ui::drawAsk(uint32_t) {
+  const Agent& a = *view();
   fb_.fillRectAlpha(0, 0, W, H, 170, fb_.color565(2, 3, 10));
-  int top = sheetTop(nopts);
+  int top = sheetTop(a.nopts);
   fb_.fillRoundRect(0, top, W, H - top + 20, 22, fb_.color565(20, 25, 52));
   fb_.fillRoundRect(W / 2 - 22, top + 8, 44, 4, 2, fb_.color565(70, 80, 130));
   fb_.setTextDatum(top_left);
   fb_.setFont(&fonts::FreeSansBold12pt7b);
   fb_.setTextColor(fb_.color565(240, 243, 255));
-  wrapText(fb_, askPrompt, 20, top + 22, W - 40, 26, 3);
-  for (int i = 0; i < nopts; i++) {
+  wrapText(fb_, a.askPrompt, 20, top + 22, W - 40, 26, 3);
+  for (int i = 0; i < a.nopts; i++) {
     int x, y, w, h;
-    optRect(nopts, i, x, y, w, h);
+    optRect(a.nopts, i, x, y, w, h);
     uint16_t c = i == 0 ? fb_.color565(60, 200, 255) : fb_.color565(36, 44, 88);
     fb_.fillRoundRect(x, y, w, h, 14, c);
     fb_.setFont(&fonts::FreeSansBold12pt7b);
     fb_.setTextColor(i == 0 ? fb_.color565(4, 12, 28) : fb_.color565(230, 235, 255));
-    centerText(fb_, opts[i], x + w / 2, y + h / 2);
+    centerText(fb_, a.opts[i], x + w / 2, y + h / 2);
   }
 }
 
@@ -632,21 +665,145 @@ void Ui::drawUpdating() {
   fb_.pushSprite(&lcd_, 0, 0);
 }
 
+// Card list (2+ agents): one card per agent over the nebula, scrollable.
+static const int LIST_Y = 88, CARD_H = 100, CARD_GAP = 10;
+
+// Text cut to a width, ending in "..." when it doesn't fit.
+static String fit(LovyanGFX& g, String s, int w) {
+  if (g.textWidth(s) <= w) return s;
+  while (s.length() > 1 && g.textWidth(s + "...") > w) s.remove(s.length() - 1);
+  return s + "...";
+}
+
+int Ui::maxScroll() const {
+  int n = count();
+  return max(0, n * (CARD_H + CARD_GAP) - CARD_GAP - (H - LIST_Y - 8));
+}
+
+int Ui::hitCard(int px, int py) const {
+  if (py < LIST_Y) return -1;
+  int k = 0;
+  for (int i = 0; i < MAXAGENTS; i++) {
+    if (!agents[i].used) continue;
+    int y = LIST_Y + k++ * (CARD_H + CARD_GAP) - scroll;
+    if (py >= y && py < y + CARD_H && px >= 12 && px < W - 12) return i;
+  }
+  return -1;
+}
+
+void Ui::drawAgents(uint32_t now) {
+  float t = now / 1000.0f;
+  nebulaHeader(fb_, nebula_, now);
+  int n = count();
+  fb_.setFont(&fonts::FreeSans9pt7b);
+  fb_.setTextColor(fb_.color565(150, 160, 210));
+  centerText(fb_, String(n) + " agents connected", W / 2, 70);
+  scroll = max(0, min(scroll, maxScroll()));
+
+  fb_.setClipRect(0, LIST_Y - 2, W, H - LIST_Y + 2);
+  int k = 0;
+  for (int i = 0; i < MAXAGENTS; i++) {
+    const Agent& a = agents[i];
+    if (!a.used) continue;
+    int x = 12, w = W - 24, y = LIST_Y + k++ * (CARD_H + CARD_GAP) - scroll;
+    if (y > H || y + CARD_H < LIST_Y) continue;
+    bool hot = a.needsYou();
+    float pulse = 0.5f + 0.5f * sinf(t * 4.5f);
+    // A card that needs you turns amber and pulses; the rest stay dark violet.
+    uint16_t bg = hot ? fb_.color565(46 + (int)(pulse * 26), 28 + (int)(pulse * 12), 8) : fb_.color565(14, 16, 38);
+    uint16_t edge = hot ? fb_.color565(255, 170 + (int)(pulse * 40), 50) : fb_.color565(48, 40, 100);
+    fb_.fillRoundRect(x, y, w, CARD_H, 16, bg);
+    fb_.drawRoundRect(x, y, w, CARD_H, 16, edge);
+    if (hot) fb_.drawRoundRect(x + 1, y + 1, w - 2, CARD_H - 2, 15, edge);
+
+    // Logo (or a dot), name and project, status on the right.
+    if (const AgentIcon* ic = iconFor(a.name)) drawMask(fb_, ic->small, ICON_SMALL, x + 24, y + 24, ic->r, ic->g, ic->b);
+    else fb_.fillCircle(x + 24, y + 24, 6, fb_.color565(PURPLE_R, PURPLE_G, PURPLE_B));
+    const char* label = a.asking ? "QUESTION" : a.attn ? "NEEDS YOU" : a.completed ? "DONE" : statusLabel(a.status);
+    uint16_t lc = hot ? fb_.color565(255, 200, 90) : a.completed ? fb_.color565(70, 220, 140) : statusColor(fb_, a.status);
+    fb_.setFont(&fonts::FreeSansBold9pt7b);
+    int lw = fb_.textWidth(label);
+    fb_.setTextColor(lc);
+    fb_.setTextDatum(middle_right);
+    fb_.drawString(label, x + w - 14, y + 24);
+    fb_.setTextDatum(middle_left);
+    fb_.setTextColor(fb_.color565(240, 243, 255));
+    String who = fit(fb_, a.name, w - 70 - lw);
+    fb_.drawString(who, x + 44, y + 24);
+    if (a.project.length()) {
+      int ww = fb_.textWidth(who);
+      fb_.setFont(&fonts::FreeSans9pt7b);
+      fb_.setTextColor(fb_.color565(130, 140, 190));
+      fb_.drawString(fit(fb_, "  " + a.project, w - 70 - lw - ww), x + 44 + ww, y + 24);
+    }
+
+    // What it's doing, then its latest activity.
+    fb_.setFont(&fonts::FreeSans9pt7b);
+    fb_.setTextColor(hot ? fb_.color565(255, 236, 200) : fb_.color565(215, 222, 245));
+    fb_.drawString(fit(fb_, a.line(), w - 30), x + 16, y + 52);
+    String act;
+    for (int m = 0; m < a.nmsg && !act.length(); m++) act = a.msgs[m].text;
+    if (act.length() && !a.asking) {
+      fb_.setTextColor(fb_.color565(120, 130, 175));
+      fb_.drawString(fit(fb_, act, w - 30), x + 16, y + 74);
+    }
+    fb_.setTextDatum(top_left);
+    if (a.progress >= 0 && !a.completed) {
+      int bw = w - 32, fw = (int)(bw * min(a.progress, 1.0f));
+      fb_.fillRoundRect(x + 16, y + CARD_H - 10, bw, 4, 2, fb_.color565(32, 38, 72));
+      if (fw > 0) fb_.fillRoundRect(x + 16, y + CARD_H - 10, max(fw, 4), 4, 2, statusColor(fb_, a.status));
+    }
+  }
+  fb_.clearClipRect();
+
+  // Scroll hint: a thin bar on the right when the list is longer than the screen.
+  int ms = maxScroll();
+  if (ms > 0) {
+    int track = H - LIST_Y - 16, len = max(30, track * (H - LIST_Y) / (H - LIST_Y + ms));
+    int y = LIST_Y + (track - len) * scroll / ms;
+    fb_.fillRoundRect(W - 5, y, 3, len, 1, fb_.color565(90, 80, 150));
+  }
+}
+
+// "< All agents" pill (top right) on an opened agent's screens; amber dot if another needs you.
+void Ui::drawBack() {
+  int x = W - 134, y = 6, w = 128, h = 30;
+  fb_.fillRoundRect(x, y, w, h, 15, fb_.color565(20, 22, 50));
+  fb_.drawRoundRect(x, y, w, h, 15, fb_.color565(60, 56, 120));
+  uint16_t c = fb_.color565(200, 205, 240);
+  fb_.drawLine(x + 18, y + 9, x + 12, y + 15, c); fb_.drawLine(x + 12, y + 15, x + 18, y + 21, c);
+  fb_.drawLine(x + 19, y + 9, x + 13, y + 15, c); fb_.drawLine(x + 13, y + 15, x + 19, y + 21, c);
+  fb_.setFont(&fonts::FreeSans9pt7b);
+  fb_.setTextColor(c);
+  fb_.setTextDatum(middle_left);
+  fb_.drawString("All agents", x + 28, y + h / 2);
+  fb_.setTextDatum(top_left);
+  for (int i = 0; i < MAXAGENTS; i++)
+    if (i != focus && agents[i].used && agents[i].needsYou()) { fb_.fillCircle(x + w - 4, y + 4, 5, fb_.color565(255, 180, 50)); break; }
+}
+
 void Ui::drawFrame(bool connected, uint32_t now) {
-  for (int i = nmsg - 1; i >= 0; i--)
-    if (msgs[i].ttl && now - msgs[i].at > msgs[i].ttl * 1000UL) nmsg = i;  // oldest expire first
-  // Nebula colours follow the state: greyscale with no agent, amber when the agent needs you.
-  bool presenceScreen = connected && !net.setup && !completed && !asking && status == ST_IDLE;
-  nebula_.mood(net.setup ? Nebula::M_NORMAL : !connected ? Nebula::M_IDLE
-               : presenceScreen && attn ? Nebula::M_ATTN : Nebula::M_NORMAL, now / 1000.0f);
+  for (Agent& ag : agents)
+    for (int i = ag.nmsg - 1; i >= 0; i--)
+      if (ag.msgs[i].ttl && now - ag.msgs[i].at > ag.msgs[i].ttl * 1000UL) ag.nmsg = i;  // oldest expire first
+  int n = count();
+  if (focus >= 0 && (n < 2 || !agents[focus].used)) focus = -1;
+  const Agent* v = view();
+  // Nebula colours follow the state: greyscale with no agent, amber when the agent (or, on
+  // the card list, any agent) needs you.
+  bool presenceScreen = v && !v->completed && !v->asking && v->status == ST_IDLE;
+  bool alarm = v ? presenceScreen && v->attn : anyNeedsYou();
+  nebula_.mood(net.setup ? Nebula::M_NORMAL : !n ? Nebula::M_IDLE : alarm ? Nebula::M_ATTN : Nebula::M_NORMAL, now / 1000.0f);
   if (net.setup) drawSetup(now);
-  else if (!connected) drawIdle(now);
-  else if (completed && !asking) drawDone(now);
-  else if (status == ST_IDLE && !asking) drawPresence(now);
+  else if (!n) drawIdle(now);
+  else if (!v) drawAgents(now);
+  else if (v->completed && !v->asking) drawDone(now);
+  else if (v->status == ST_IDLE && !v->asking) drawPresence(now);
   else {
     drawStatus(now);
-    if (asking) drawAsk(now);
+    if (v->asking) drawAsk(now);
   }
+  if (!net.setup && n > 1 && v) drawBack();
   if (showingUpdate(connected)) drawUpdatePrompt();
   if (showingInfo(connected)) drawInfo(now);
   if (hold > 0) drawHold();

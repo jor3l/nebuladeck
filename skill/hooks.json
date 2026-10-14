@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "curl -4 -s -m 2 -X POST \"http://${NEBULADECK_HOST:-nebuladeck.local}/api/hook?event=SessionStart\" >/dev/null 2>&1 &"
+            "command": "j=$(cat); c=$(printf '%s' \"$j\" | grep -o '\"cwd\" *: *\"[^\"]*\"' | head -n 1 | sed 's/^[^:]*: *\"//; s/\"$//'); curl -4 -s -m 2 -G -X POST --data-urlencode \"event=SessionStart\" --data-urlencode \"project=${c##*/}\" \"http://${NEBULADECK_HOST:-nebuladeck.local}/api/hook\" >/dev/null 2>&1 &"
           }
         ]
       }
@@ -15,7 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "curl -4 -s -m 2 -X POST \"http://${NEBULADECK_HOST:-nebuladeck.local}/api/hook?event=UserPromptSubmit\" >/dev/null 2>&1 &"
+            "command": "j=$(cat); c=$(printf '%s' \"$j\" | grep -o '\"cwd\" *: *\"[^\"]*\"' | head -n 1 | sed 's/^[^:]*: *\"//; s/\"$//'); curl -4 -s -m 2 -G -X POST --data-urlencode \"event=UserPromptSubmit\" --data-urlencode \"project=${c##*/}\" \"http://${NEBULADECK_HOST:-nebuladeck.local}/api/hook\" >/dev/null 2>&1 &"
           }
         ]
       }
@@ -25,7 +25,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "t=$(sed -n 's/.*\"tool_name\" *: *\"\\([^\"]*\\)\".*/\\1/p' | head -n 1); curl -4 -s -m 2 -X POST \"http://${NEBULADECK_HOST:-nebuladeck.local}/api/hook?event=PreToolUse&tool=$t\" >/dev/null 2>&1 &"
+            "command": "j=$(cat); c=$(printf '%s' \"$j\" | grep -o '\"cwd\" *: *\"[^\"]*\"' | head -n 1 | sed 's/^[^:]*: *\"//; s/\"$//'); t=$(printf '%s' \"$j\" | grep -o '\"tool_name\" *: *\"[^\"]*\"' | head -n 1 | sed 's/^[^:]*: *\"//; s/\"$//'); curl -4 -s -m 2 -G -X POST --data-urlencode \"event=PreToolUse\" --data-urlencode \"project=${c##*/}\" --data-urlencode \"tool=$t\" \"http://${NEBULADECK_HOST:-nebuladeck.local}/api/hook\" >/dev/null 2>&1 &"
           }
         ]
       }
@@ -35,7 +35,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "m=$(sed -n 's/.*\"message\" *: *\"\\([^\"]*\\)\".*/\\1/p' | head -n 1); case \"$m\" in *\"waiting for your input\"*) k=idle;; *) k=attn;; esac; curl -4 -s -m 2 -X POST \"http://${NEBULADECK_HOST:-nebuladeck.local}/api/hook?event=Notification&kind=$k\" >/dev/null 2>&1 &"
+            "command": "j=$(cat); c=$(printf '%s' \"$j\" | grep -o '\"cwd\" *: *\"[^\"]*\"' | head -n 1 | sed 's/^[^:]*: *\"//; s/\"$//'); m=$(printf '%s' \"$j\" | grep -o '\"message\" *: *\"[^\"]*\"' | head -n 1 | sed 's/^[^:]*: *\"//; s/\"$//'); case \"$m\" in *\"waiting for your input\"*) k=idle;; *) k=attn;; esac; curl -4 -s -m 2 -G -X POST --data-urlencode \"event=Notification\" --data-urlencode \"project=${c##*/}\" --data-urlencode \"kind=$k\" \"http://${NEBULADECK_HOST:-nebuladeck.local}/api/hook\" >/dev/null 2>&1 &"
           }
         ]
       }
@@ -45,7 +45,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "curl -4 -s -m 2 -X POST \"http://${NEBULADECK_HOST:-nebuladeck.local}/api/hook?event=Stop\" >/dev/null 2>&1 &"
+            "command": "j=$(cat); c=$(printf '%s' \"$j\" | grep -o '\"cwd\" *: *\"[^\"]*\"' | head -n 1 | sed 's/^[^:]*: *\"//; s/\"$//'); curl -4 -s -m 2 -G -X POST --data-urlencode \"event=Stop\" --data-urlencode \"project=${c##*/}\" \"http://${NEBULADECK_HOST:-nebuladeck.local}/api/hook\" >/dev/null 2>&1 &"
           }
         ]
       }
@@ -55,7 +55,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "curl -4 -s -m 2 -X POST \"http://${NEBULADECK_HOST:-nebuladeck.local}/api/hook?event=SessionEnd\" >/dev/null 2>&1 &"
+            "command": "j=$(cat); c=$(printf '%s' \"$j\" | grep -o '\"cwd\" *: *\"[^\"]*\"' | head -n 1 | sed 's/^[^:]*: *\"//; s/\"$//'); curl -4 -s -m 2 -G -X POST --data-urlencode \"event=SessionEnd\" --data-urlencode \"project=${c##*/}\" \"http://${NEBULADECK_HOST:-nebuladeck.local}/api/hook\" >/dev/null 2>&1 &"
           }
         ]
       }

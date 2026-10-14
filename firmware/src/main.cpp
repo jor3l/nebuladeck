@@ -47,6 +47,7 @@ void loop() {
   enum : uint8_t { SH_NONE, SH_INFO, SH_UPDATE };
   static uint8_t pressed = SH_NONE;  // which bottom sheet the finger went down on
   static int32_t sx, sy;
+  static int32_t x0List, y0List;  // where a press on the card list started
   int32_t x, y;
   bool touching = lcd.getTouch(&x, &y);
   bool conn = !ui.net.setup && api.connected(now);
@@ -60,10 +61,11 @@ void loop() {
   if (touching) lastTouch = now;
   uint32_t lastActive = (int32_t)(api.lastRequest - lastTouch) > 0 ? api.lastRequest : lastTouch;
   static uint32_t attnSince = 0;
-  bool attn = conn && ui.attn;
+  bool anyAsking = false, attn = false;
+  for (const Agent& a : ui.agents) if (a.used) { anyAsking |= a.asking; attn |= a.attn; }
   if (!attn) attnSince = 0;
   else if (!attnSince) attnSince = now;
-  bool keepOn = ui.net.setup || ui.asking || (attn && now - attnSince < ATTN_ON_MS) || ui.updatePct >= 0;
+  bool keepOn = ui.net.setup || anyAsking || (attn && now - attnSince < ATTN_ON_MS) || ui.updatePct >= 0;
   bool idle = !keepOn && now - lastActive > SLEEP_MS;
   if (asleep && !idle) {
     asleep = false;
@@ -83,7 +85,23 @@ void loop() {
     down = touching;
     return;  // no drawing, no touch handling
   }
-  if (touching && ui.onNebula(conn) && !ui.info && !pressed) {
+  // Several agents: drag the card list to scroll, tap a card to open that agent, tap
+  // "All agents" to come back.
+  bool list = !ui.net.setup && conn && !ui.view();
+  static bool listPress = false;
+  static int32_t ly0, lscroll0, lmove;
+  if (touching && !down && list && !ui.info && y >= 80) { listPress = true; ly0 = y; lscroll0 = ui.scroll; lmove = 0; }
+  if (listPress && touching) {
+    lmove = max(lmove, (int32_t)abs(y - ly0));
+    ui.scroll = max(0, min((int)(lscroll0 - (y - ly0)), ui.maxScroll()));
+  } else if (listPress) {  // released
+    listPress = false;
+    if (lmove < 12) { int c = ui.hitCard(x0List, y0List); if (c >= 0) { ui.focus = c; ui.info = false; } }
+  }
+  if (listPress && !down) { x0List = x; y0List = y; }
+  if (touching && !down && ui.hitBack(x, y)) ui.focus = -1;
+
+  if (touching && ui.onNebula(conn) && !ui.info && !pressed && !list && !listPress) {
     // Ripple on press, then a trail while dragging.
     static int32_t lx = -100, ly = -100;
     static uint32_t lastRip = 0;
@@ -132,13 +150,14 @@ void loop() {
     pressed = SH_NONE;
   }
   bool sheet = pressed || infoSheet || updateSheet;
-  if (touching && !down && ui.asking && conn) {
+  Agent* v = ui.view();
+  if (touching && !down && v && v->asking) {
     int c = ui.hitAsk(x, y);
-    if (c >= 0) api.answer(c);
+    if (c >= 0) api.answer(*v, c);
   }
 
   // Hold still on a nebula screen to reach WiFi setup.
-  if (touching && !ui.net.setup && !sheet && ui.onNebula(conn)) {
+  if (touching && !ui.net.setup && !sheet && !list && ui.onNebula(conn)) {
     if (!down) { holdStart = now; hx = x; hy = y; }
     if ((x - hx) * (x - hx) + (y - hy) * (y - hy) > 30 * 30) holdStart = 0;  // a drag, not a hold
     ui.hold = holdStart && now - holdStart > 1000 ? (now - holdStart - 1000) / float(HOLD_MS - 1000) : 0;

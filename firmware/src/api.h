@@ -12,26 +12,20 @@ class Api {
   explicit Api(Ui& ui) : ui_(ui) {}
   void begin();
   void poll(uint32_t now);
-  // Signed: requests handled inside poll(now) stamp lastSeen_ with a slightly later millis()
-  // than `now`; unsigned, that difference wrapped to ~49 days and ended the session (and its ask).
-  bool connected(uint32_t now) const { return lastSeen_ && (int32_t)(now - lastSeen_) < (int32_t)LEASE_MS; }
-  void answer(int choice);  // an ask option was tapped
+  bool connected(uint32_t now) const;  // any agent connected
+  void answer(Agent& a, int choice);   // an ask option was tapped
   uint32_t lastRequest = 0;  // millis() of the last command (wakes a sleeping screen)
   std::function<void()> onForgetWifi;
   std::function<void()> onUpdate;  // install the available release (ui.update)
 
  private:
-  enum AskState : uint8_t { ASK_NONE, ASK_PENDING, ASK_ANSWERED, ASK_CANCELLED };
   void route();
   void info();
   void askStatus();
   int apply(const char* t, JsonDocument& in, JsonDocument& out, uint32_t now);
-  void cancelAsk();
+  Agent* resolve(JsonDocument& doc, uint32_t now, bool create);
+  Agent* findAsk(const String& id);
+  void cancelAsk(Agent& a);
 
   Ui& ui_;
-  uint32_t lastSeen_ = 0, askDeadline_ = 0;
-  uint8_t askState_ = ASK_NONE;
-  uint8_t beforeAsk_ = 0;  // status to return to once the ask is answered or cancelled
-  int askChoice_ = -1;
-  String askLabel_;
 };

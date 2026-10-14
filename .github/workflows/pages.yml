@@ -10,6 +10,13 @@ on:
     paths:
       - 'site/**'
       - 'skill/**'
+      - 'tests/**'
+      - '.github/workflows/pages.yml'
+  pull_request:
+    paths:
+      - 'site/**'
+      - 'skill/**'
+      - 'tests/**'
       - '.github/workflows/pages.yml'
 
 permissions:
@@ -18,7 +25,19 @@ permissions:
   id-token: write
 
 jobs:
+  # The page and hooks must pass their tests before anything deploys.
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 tests/test_hooks.py
+      - run: python3 tests/test_page.py
+        env:
+          CHROME: /usr/bin/google-chrome
+
   deploy:
+    needs: test
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     concurrency:
       group: pages

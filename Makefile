@@ -3,7 +3,7 @@
 PORT ?= $(shell pio device list 2>/dev/null | awk '/^\/dev\//{p=$$0} /VID:PID=303A/{print p; exit}')
 FW   := firmware
 
-.PHONY: build flash monitor run clean port demo install image
+.PHONY: build flash monitor run clean port demo install image test e2e
 
 build:
 	cd $(FW) && pio run -e sc01plus
@@ -40,3 +40,13 @@ install:
 # Local builds are channel "local" (no OTA checks) unless PLATFORMIO_BUILD_FLAGS says otherwise.
 image: build
 	ESPTOOL="$$(head -1 $$(which pio) | sed 's/^#!//') $$HOME/.platformio/packages/tool-esptoolpy/esptool.py" ./scripts/merge-firmware.sh
+
+# Tests without hardware: Claude Code hooks against a fake device, the setup page in headless Chrome.
+test:
+	python3 tests/test_hooks.py
+	python3 tests/test_page.py
+
+# End-to-end against the real device (NEBULADECK_HOST, default nebuladeck.local). Uses its own
+# "E2E-*" agents and cleans up; flash the build you want to test first.
+e2e:
+	python3 tests/test_device.py

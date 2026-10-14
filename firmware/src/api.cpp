@@ -55,6 +55,51 @@ static const char* toolText(const String& t) {
   return "Working...";
 }
 
+// Finds the agent a request is about: same name and project, or (when the request names no
+// project, like a skill's msg) the most recent agent with that name. Creates one if asked,
+// reusing the least recently seen slot when all are taken.
+Agent* Api::resolve(JsonDocument& doc, uint32_t now, bool create) {
+  String name = doc["agent"].is<const char*>() ? doc["agent"].as<String>() : String();
+  String project = doc["project"].is<const char*>() ? doc["project"].as<String>() : String();
+  if (name.length() > 32) name.remove(32);
+  if (project.length() > 48) project.remove(48);
+  Agent* best = nullptr;
+  for (Agent& a : ui_.agents) {
+    if (!a.used) continue;
+    if (name.length() && !a.name.equalsIgnoreCase(name)) continue;
+    bool exact = project.length() && a.project == project;
+    if (project.length() && a.project.length() && !exact) continue;
+    // Prefer an exact project match, then the most recently seen.
+    if (!best || exact > (best->project == project) || (exact == (best->project == project) && (int32_t)(a.lastSeen - best->lastSeen) > 0)) best = &a;
+  }
+  if (best) {
+    if (project.length() && !best->project.length()) best->project = project;  // adopt
+    return best;
+  }
+  if (!create) return nullptr;
+  Agent* slot = nullptr;
+  for (Agent& a : ui_.agents)
+    if (!a.used) { slot = &a; break; }
+  if (!slot) {
+    for (Agent& a : ui_.agents)
+      if (!slot || (int32_t)(slot->lastSeen - a.lastSeen) > 0) slot = &a;
+    cancelAsk(*slot);
+  }
+  slot->clear();
+  slot->used = true;
+  slot->name = name.length() ? name : String("Agent");
+  slot->project = project;
+  slot->lastSeen = now;
+  return slot;
+}
+
+Agent* Api::findAsk(const String& id) {
+  if (!id.length()) return nullptr;
+  for (Agent& a : ui_.agents)
+    if (a.used && a.askId == id) return &a;
+  return nullptr;
+}
+
 void Api::begin() {
   server.on("/api/info", HTTP_GET, [this] { info(); });
   server.on("/api/info", HTTP_OPTIONS, [] {
@@ -80,12 +125,11 @@ void Api::begin() {
   });
   // Plain-text ask result for shell loops: "pending", "cancelled" or "answered:<label>".
   server.on("/api/answer", HTTP_GET, [this] {
-    String id = server.arg("id");
-    bool mine = id.length() && id == ui_.askId;
-    uint8_t st = mine ? askState_ : ASK_CANCELLED;
-    server.send(200, "text/plain", st == ASK_PENDING ? String("pending") : st == ASK_ANSWERED ? "answered:" + askLabel_ : String("cancelled"));
+    Agent* a = findAsk(server.arg("id"));
+    uint8_t st = a ? a->askState : ASK_CANCELLED;
+    server.send(200, "text/plain", st == ASK_PENDING ? String("pending") : st == ASK_ANSWERED ? "answered:" + a->askLabel : String("cancelled"));
   });
-  // Claude Code hooks: POST /api/hook?event=<hook_event_name>&tool=<tool_name>[&agent=Name].
+  // Claude Code hooks: POST /api/hook?event=<hook_event_name>&tool=&kind=&project=&agent=.
   // The event body is never needed (it can hold whole files), so hooks send none.
   server.on("/api/hook", HTTP_POST, [this] {
     String ev = server.arg("event");
@@ -102,14 +146,16 @@ void Api::begin() {
     else if (ev == "SessionEnd") t = "bye";
     else return sendError(400, "unknown event");
     in["agent"] = server.hasArg("agent") ? server.arg("agent") : "Claude";  // the hook format is Claude Code's
+    if (server.arg("project").length()) in["project"] = server.arg("project");
     out["ok"] = true;
     uint32_t now = millis();
     apply(t, in, out, now);
-    // During a task, tool steps also go into the card's activity list (without the "...").
-    if (ev == "PreToolUse" && !ui_.completed && ui_.status != ST_IDLE) {
+    // During a task, tool steps also go into its activity list (without the "...").
+    Agent* a = ev == "PreToolUse" ? resolve(in, now, false) : nullptr;
+    if (a && !a->completed && a->status != ST_IDLE) {
       String step = in["text"].as<String>();
       if (step.endsWith("...")) step.remove(step.length() - 3);
-      ui_.pushStep(step, now);
+      a->pushStep(step, now);
     }
     send(200, out);
   });
@@ -119,8 +165,16 @@ void Api::begin() {
 
 void Api::poll(uint32_t now) {
   server.handleClient();
-  if (askState_ == ASK_PENDING && (!connected(now) || (askDeadline_ && (int32_t)(now - askDeadline_) >= 0))) cancelAsk();
+  for (Agent& a : ui_.agents) {
+    if (!a.used) continue;
+    // Signed: requests handled inside poll(now) stamp lastSeen with a slightly later
+    // millis() than `now`; unsigned, that wrapped to ~49 days and dropped the agent.
+    if ((int32_t)(now - a.lastSeen) >= (int32_t)LEASE_MS) { cancelAsk(a); a.clear(); continue; }
+    if (a.askState == ASK_PENDING && a.askDeadline && (int32_t)(now - a.askDeadline) >= 0) cancelAsk(a);
+  }
 }
+
+bool Api::connected(uint32_t) const { return ui_.count() > 0; }
 
 void Api::info() {
   JsonDocument doc;
@@ -133,24 +187,39 @@ void Api::info() {
   doc["rssi"] = WiFi.RSSI();
   doc["w"] = 320;
   doc["h"] = 480;
-  doc["session"] = connected(millis());
+  doc["session"] = ui_.count() > 0;
+  JsonArray list = doc["agents"].to<JsonArray>();
+  for (const Agent& a : ui_.agents) {
+    if (!a.used) continue;
+    JsonObject o = list.add<JsonObject>();
+    o["agent"] = a.name;
+    o["project"] = a.project;
+    o["line"] = a.line();
+    o["status"] = a.status == ST_WORKING ? "working" : a.status == ST_WAITING ? "waiting" : a.status == ST_DONE ? "done"
+                  : a.status == ST_ERROR ? "error" : "idle";
+    o["asking"] = a.asking;
+    o["attn"] = a.attn;
+    o["completed"] = a.completed;
+    o["activity"] = a.nmsg;
+    if (a.nmsg) o["last"] = a.msgs[0].text;
+  }
   if (ui_.update.length()) doc["update"] = ui_.update;
   corsHeaders();
   send(200, doc);
 }
 
-// GET /api/ask?id=...  Only the newest ask is kept; any other id reads as cancelled.
+// GET /api/ask?id=...  Each agent keeps its newest ask; unknown or replaced ids read as cancelled.
 void Api::askStatus() {
   JsonDocument doc;
   doc["ok"] = true;
   String id = server.arg("id");
   doc["id"] = id;
-  bool mine = id.length() && id == ui_.askId;
-  uint8_t st = mine ? askState_ : ASK_CANCELLED;
+  Agent* a = findAsk(id);
+  uint8_t st = a ? a->askState : ASK_CANCELLED;
   doc["state"] = st == ASK_PENDING ? "pending" : st == ASK_ANSWERED ? "answered" : "cancelled";
   if (st == ASK_ANSWERED) {
-    doc["choice"] = askChoice_;
-    doc["label"] = askLabel_;
+    doc["choice"] = a->askChoice;
+    doc["label"] = a->askLabel;
   }
   send(200, doc);
 }
@@ -177,82 +246,84 @@ int Api::apply(const char* t, JsonDocument& doc, JsonDocument& out, uint32_t now
   if (!known) return 404;
   lastRequest = now;
 
-  if (!strcmp(t, "bye")) {
-    cancelAsk();
-    ui_.reset();
-    lastSeen_ = 0;  // straight back to the nebula
+  if (!strcmp(t, "bye")) {  // this agent leaves; the others stay
+    if (Agent* a = resolve(doc, now, false)) { cancelAsk(*a); a->clear(); }
     return 200;
   }
-  if (!connected(now)) ui_.reset();  // a new session starts clean
-  lastSeen_ = now;
-  // Any command may say which agent sent it (shown by name and logo).
-  if (doc["agent"].is<const char*>() && strlen(doc["agent"]) <= 32) ui_.agent = doc["agent"].as<const char*>();
+  if (!strcmp(t, "ask_cancel")) {
+    const char* id = doc["id"] | "";
+    Agent* a = *id ? findAsk(id) : resolve(doc, now, false);
+    if (a) cancelAsk(*a);
+    return 200;
+  }
+  if (!strcmp(t, "ask")) {
+    JsonArray opts = doc["options"].as<JsonArray>();
+    if (opts.size() < 1 || opts.size() > Agent::MAXOPT) return 400;
+  }
+  Agent* ap = resolve(doc, now, true);
+  Agent& a = *ap;
+  a.lastSeen = now;
 
   if (!strcmp(t, "state")) {
     // A task starts when we leave the presence/done screens (or the first state of a session).
-    if (ui_.completed || ui_.status == ST_IDLE || !ui_.taskStart) ui_.taskStart = now;
-    ui_.completed = false;
-    if (doc["project"].is<const char*>()) ui_.project = doc["project"].as<const char*>();
-    if (doc["title"].is<const char*>()) ui_.title = doc["title"].as<const char*>();
-    if (doc["status"].is<const char*>()) ui_.status = parseStatus(doc["status"]);
-    ui_.progress = doc["progress"].is<float>() ? doc["progress"].as<float>() : -1;
+    if (a.completed || a.status == ST_IDLE || !a.taskStart) a.taskStart = now;
+    a.completed = false;
+    if (doc["title"].is<const char*>()) a.title = doc["title"].as<const char*>();
+    if (doc["status"].is<const char*>()) a.status = parseStatus(doc["status"]);
+    a.progress = doc["progress"].is<float>() ? doc["progress"].as<float>() : -1;
   } else if (!strcmp(t, "msg")) {
-    ui_.pushMsg(doc["text"] | "", parseLevel(doc["level"]), doc["ttl"] | 0, now);
+    a.pushMsg(doc["text"] | "", parseLevel(doc["level"]), doc["ttl"] | 0, now);
   } else if (!strcmp(t, "ask")) {
     JsonArray opts = doc["options"].as<JsonArray>();
-    if (opts.size() < 1 || opts.size() > Ui::MAXOPT) return 400;
-    cancelAsk();
+    cancelAsk(a);
     char id[9];
     snprintf(id, sizeof id, "%08lx", (unsigned long)esp_random());
     // Callers may pick the id (handy in shell scripts); otherwise it's random.
-    ui_.askId = doc["id"].is<const char*>() && strlen(doc["id"]) <= 32 ? doc["id"].as<const char*>() : id;
-    ui_.askPrompt = doc["prompt"] | "";
-    ui_.nopts = 0;
-    for (JsonVariant o : opts) ui_.opts[ui_.nopts++] = o.as<String>();
+    a.askId = doc["id"].is<const char*>() && strlen(doc["id"]) <= 32 ? doc["id"].as<const char*>() : id;
+    a.askPrompt = doc["prompt"] | "";
+    a.nopts = 0;
+    for (JsonVariant o : opts) a.opts[a.nopts++] = o.as<String>();
     // A question asked outside a task returns to the presence screen afterwards, not to an
     // empty "Working" card.
-    if (ui_.status != ST_WAITING) beforeAsk_ = ui_.completed ? ST_IDLE : ui_.status;
-    ui_.completed = false;
-    ui_.asking = true;
-    ui_.status = ST_WAITING;
+    if (a.status != ST_WAITING) a.beforeAsk = a.completed ? ST_IDLE : a.status;
+    a.completed = false;
+    a.asking = true;
+    a.status = ST_WAITING;
     uint32_t timeout = doc["timeout"] | 0;
-    askDeadline_ = timeout ? now + timeout * 1000 : 0;
-    askState_ = ASK_PENDING;
-    out["id"] = ui_.askId;
-  } else if (!strcmp(t, "ask_cancel")) {
-    const char* id = doc["id"] | "";
-    if (!*id || ui_.askId == id) cancelAsk();
+    a.askDeadline = timeout ? now + timeout * 1000 : 0;
+    a.askState = ASK_PENDING;
+    out["id"] = a.askId;
   } else if (!strcmp(t, "done")) {
-    cancelAsk();
-    ui_.completed = true;
-    ui_.status = ST_DONE;
-    ui_.summary = doc["summary"] | "";
-    ui_.tokIn = doc["tokens_in"].as<uint32_t>();
-    ui_.tokOut = doc["tokens_out"].as<uint32_t>();
-    ui_.durationS = doc["duration"].is<int>() ? doc["duration"].as<int>() : -1;
+    cancelAsk(a);
+    a.completed = true;
+    a.status = ST_DONE;
+    a.summary = doc["summary"] | "";
+    a.tokIn = doc["tokens_in"].as<uint32_t>();
+    a.tokOut = doc["tokens_out"].as<uint32_t>();
+    a.durationS = doc["duration"].is<int>() ? doc["duration"].as<int>() : -1;
   } else if (!strcmp(t, "presence")) {
-    ui_.presence = doc["text"] | "";
-    ui_.attn = doc["attn"] | false;
-    if (doc["new_turn"] | false) { ui_.completed = false; ui_.status = ST_IDLE; }
+    a.presence = doc["text"] | "";
+    a.attn = doc["attn"] | false;
+    if (doc["new_turn"] | false) { a.completed = false; a.status = ST_IDLE; }
     // End of a turn: a task card the agent never closed would stay up forever.
-    if ((doc["end_turn"] | false) && ui_.status == ST_WORKING) ui_.status = ST_IDLE;
+    if ((doc["end_turn"] | false) && a.status == ST_WORKING) a.status = ST_IDLE;
   } else if (!strcmp(t, "clear")) {
-    ui_.nmsg = 0;
+    a.nmsg = 0;
   }
   return 200;
 }
 
-void Api::cancelAsk() {
-  if (askState_ == ASK_PENDING) askState_ = ASK_CANCELLED;
-  if (ui_.asking && ui_.status == ST_WAITING) ui_.status = beforeAsk_;
-  ui_.asking = false;
+void Api::cancelAsk(Agent& a) {
+  if (a.askState == ASK_PENDING) a.askState = ASK_CANCELLED;
+  if (a.asking && a.status == ST_WAITING) a.status = a.beforeAsk;
+  a.asking = false;
 }
 
-void Api::answer(int choice) {
-  if (askState_ != ASK_PENDING) return;
-  askState_ = ASK_ANSWERED;
-  askChoice_ = choice;
-  askLabel_ = ui_.opts[choice];
-  ui_.asking = false;
-  if (ui_.status == ST_WAITING) ui_.status = beforeAsk_;
+void Api::answer(Agent& a, int choice) {
+  if (a.askState != ASK_PENDING) return;
+  a.askState = ASK_ANSWERED;
+  a.askChoice = choice;
+  a.askLabel = a.opts[choice];
+  a.asking = false;
+  if (a.status == ST_WAITING) a.status = a.beforeAsk;
 }

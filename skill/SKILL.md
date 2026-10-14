@@ -27,9 +27,11 @@ are for real tasks.
 
 1. **Start of a task** (more than a couple of steps):
    `nd state '{"agent":"Claude","status":"working","title":"<what you are doing>","project":"<folder name>"}'`
-   (`"agent"` picks the name and logo on the screen; include it in your first call of a task.)
+   Put `"agent":"Claude"` and `"project":"<folder name>"` in **every** call (state, msg, ask, done).
+   Several agents can share the screen; these two keep your work on your own card, and `"agent"`
+   picks the name and logo.
 2. **Progress**: send `state` again with a new title or `"progress":0.4` when the phase changes, not on every file.
-3. **Milestones / problems**: `nd msg '{"text":"<one line>","level":"info|warn|error"}'`
+3. **Milestones / problems**: `nd msg '{"agent":"Claude","project":"<folder>","text":"<one line>","level":"info|warn|error"}'`
 4. **Any question for the user with clear options**: a decision, an approval, a yes/no, "A or B?".
    This applies at any time, not only during a task: if you are about to ask the user something in the
    chat that they could answer with a tap, ask it on the screen first. They may be away from the
@@ -38,14 +40,14 @@ are for real tasks.
    Post an ask with your own short id, then poll for the answer:
    ```bash
    H="http://${NEBULADECK_HOST:-nebuladeck.local}/api"; ID=q$RANDOM
-   curl -4 -s -m 3 -H 'Content-Type: application/json' -d "{\"id\":\"$ID\",\"prompt\":\"Delete 12 files?\",\"options\":[\"Delete\",\"Skip\"],\"timeout\":120}" "$H/ask" >/dev/null || echo unreachable
+   curl -4 -s -m 3 -H 'Content-Type: application/json' -d "{\"agent\":\"Claude\",\"project\":\"<folder>\",\"id\":\"$ID\",\"prompt\":\"Delete 12 files?\",\"options\":[\"Delete\",\"Skip\"],\"timeout\":120}" "$H/ask" >/dev/null || echo unreachable
    for _ in $(seq 125); do a=$(curl -4 -s -m 3 "$H/answer?id=$ID"); [ "$a" = pending ] || break; sleep 1; done; echo "$a"
    ```
    - Prints `answered:<option>`, or `cancelled` (nobody answered in time). Empty or `unreachable` = no screen.
    - If it isn't `answered:...`, ask in the chat instead (the screen ask has already expired). Always set
      `timeout` so you never hang; ~120 s gives someone across the room time to look.
    - Max 4 options, keep each under ~16 characters. An ask already switches the screen to "needs you".
-5. **Finished**: `nd done '{"summary":"<one-sentence result>"}'`
+5. **Finished**: `nd done '{"agent":"Claude","project":"<folder>","summary":"<one-sentence result>"}'`
    - Add `"tokens_in"`, `"tokens_out"` and `"duration"` (seconds) only if you actually know them; the
      token card is hidden otherwise.
    - Always send this as the last thing you do, even when the task failed (say so in the summary,
