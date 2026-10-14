@@ -5,6 +5,15 @@
 
 static WebServer server(80);
 
+// The setup page may read /api/info to test the connection ("Test NebulaDeck"). Only that
+// origin: other websites can still reach the device but can't read its answers.
+static const char* PAGE_ORIGIN = "https://jor3l.github.io";
+
+static void corsHeaders() {
+  server.sendHeader("Access-Control-Allow-Origin", PAGE_ORIGIN);
+  server.sendHeader("Access-Control-Allow-Private-Network", "true");  // Chrome's local-network preflight
+}
+
 static uint8_t parseStatus(const char* s) {
   if (!s) return ST_IDLE;
   if (!strcmp(s, "working")) return ST_WORKING;
@@ -48,6 +57,11 @@ static const char* toolText(const String& t) {
 
 void Api::begin() {
   server.on("/api/info", HTTP_GET, [this] { info(); });
+  server.on("/api/info", HTTP_OPTIONS, [] {
+    corsHeaders();
+    server.sendHeader("Access-Control-Allow-Methods", "GET");
+    server.send(204);
+  });
   server.on("/api/ask", HTTP_GET, [this] { askStatus(); });
   server.on("/api/wifi/forget", HTTP_POST, [this] {
     JsonDocument doc;
@@ -111,6 +125,7 @@ void Api::info() {
   doc["h"] = 480;
   doc["session"] = connected(millis());
   if (ui_.update.length()) doc["update"] = ui_.update;
+  corsHeaders();
   send(200, doc);
 }
 

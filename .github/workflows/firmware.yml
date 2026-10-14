@@ -1,13 +1,22 @@
 name: firmware
 
-# Every push to main is a dev build: it replaces the rolling `dev` prerelease, which dev
-# devices update from and the web flasher offers as "Dev". Stable releases come only from
-# the manual `release` workflow.
+# Every push to main that touches the firmware is a dev build: it replaces the rolling `dev`
+# prerelease, which dev devices update from and the web flasher offers as "Dev". Stable
+# releases come only from the manual `release` workflow. Page-only changes deploy through
+# pages.yml without a firmware build.
 on:
   workflow_dispatch:
   push:
     branches: [main]
+    paths:
+      - 'firmware/**'
+      - 'scripts/merge-firmware.sh'
+      - '.github/workflows/firmware.yml'
   pull_request:
+    paths:
+      - 'firmware/**'
+      - 'scripts/merge-firmware.sh'
+      - '.github/workflows/firmware.yml'
 
 permissions:
   contents: write
