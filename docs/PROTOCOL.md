@@ -43,7 +43,8 @@ on `bye`; with all 8 slots taken, the least recently seen one is replaced. Swipi
 Agents survive restarts (power loss, flashing, updates): the device saves them to flash at most
 every 5 s and restores them at boot, questions included. With no clock it can't tell how long it
 was off, so restored cards read RECONNECTING until their agent sends something, and expire after
-10 minutes if it never does. `POST /api/restart` saves and restarts.
+10 minutes if it never does (time switched on; restarting doesn't reset the countdown). `POST /api/restart`
+saves and restarts.
 
 With one agent the screens are the single-agent ones below. With two or more, the nebula shows
 one card per agent (logo, name and project, what it is doing, its latest activity, progress);

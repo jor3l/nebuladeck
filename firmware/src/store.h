@@ -6,11 +6,13 @@
 // after a restart: power loss, a crash, flashing or an update. Times are stored as ages and
 // rebased on the new clock. The device has no wall clock, so it can't tell a quick reboot
 // from a night unplugged: restored agents get at most RESTORE_LEASE_MS more unless they
-// send something.
+// send something. That countdown only runs while the device does, so it is saved every
+// RESTORED_SAVE_MS: otherwise each restart (flashing, a power blip) handed the card a fresh lease.
 class Store {
  public:
   static constexpr uint32_t SAVE_EVERY_MS = 5000;       // at most this often while things change
   static constexpr uint32_t RESTORE_LEASE_MS = 600000;  // 10 min for restored agents to check in
+  static constexpr uint32_t RESTORED_SAVE_MS = 30000;   // keeps their countdown across restarts
 
   bool begin();
   void load(Ui& ui, uint32_t now, uint32_t leaseMs);

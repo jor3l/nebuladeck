@@ -11,6 +11,9 @@ bool Store::begin() {
 }
 
 void Store::poll(Ui& ui, uint32_t now) {
+  if (!ui.dirty && now - lastSave_ >= RESTORED_SAVE_MS)
+    for (const Agent& a : ui.agents)
+      if (a.used && a.restored) { ui.dirty = true; break; }
   if (!ui.dirty || now - lastSave_ < SAVE_EVERY_MS) return;
   save(ui, now);
 }
@@ -123,5 +126,6 @@ void Store::load(Ui& ui, uint32_t now, uint32_t leaseMs) {
       a.askChoice = q["choice"] | -1;
     }
   }
+  ui.dirty = n > 0;  // save the shortened leases right away
   Serial.printf("store: restored %d agent(s)\n", n);
 }
