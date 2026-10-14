@@ -785,11 +785,12 @@ int Ui::cardOrder(int* idx) const {
 }
 
 // A card's height: the session's own content plus one row per running subagent.
-static const int SUB_ROW = 26, SUB_TOP = 10;  // row height; gap between the session's content and its rows
+// Each row is a band with a divider on top and its content centred below it, so every gap matches.
+static const int SUB_ROW = 32, SUB_PAD = 6;  // row height; room under the last row
 int Ui::cardHeight(int i) const {
   int kids = 0;
   for (const Agent& c : agents) kids += c.used && c.sub.length() && parentOf(c) == i;
-  return CARD_H + (kids ? SUB_TOP + kids * SUB_ROW + 10 : 0);  // 10: room under the last row
+  return CARD_H + (kids ? kids * SUB_ROW + SUB_PAD : 0);
 }
 
 int Ui::hitCard(int px, int py) const {
@@ -875,11 +876,11 @@ void Ui::drawAgents(uint32_t now) {
 
     // Its running subagents, one compact row each: icon, name, a dot in the colour its status
     // word would have.
-    int ry = y + CARD_H + SUB_TOP;
+    int ry = y + CARD_H;
     for (const Agent& c : agents) {
       if (!c.used || !c.sub.length() || parentOf(c) != idx[k]) continue;
-      fb_.drawFastHLine(x + 14, ry - SUB_TOP / 2, w - 28, fb_.color565(36, 34, 76));  // centred in the gap above the row
-      int cy = ry + SUB_ROW / 2 - 1;
+      fb_.drawFastHLine(x + 14, ry, w - 28, fb_.color565(36, 34, 76));
+      int cy = ry + SUB_ROW / 2;
       // A smaller icon than the session's (16 px vs 22).
       if (const AgentIcon* ic = iconFor(c.name)) drawMaskScaled(fb_, ic->small, ICON_SMALL, 16, x + 26, cy, ic->r, ic->g, ic->b);
       else fb_.fillCircle(x + 26, cy, 4, fb_.color565(PURPLE_R, PURPLE_G, PURPLE_B));
