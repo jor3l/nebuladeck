@@ -726,12 +726,11 @@ int Ui::hitCard(int px, int py) const {
 void Ui::drawAgents(uint32_t now) {
   float t = now / 1000.0f;
   header(now);
-  int n = count();
-  fb_.setFont(&fonts::FreeSans9pt7b);
-  fb_.setTextSize(0.8f);  // smaller than the logo above it
-  fb_.setTextColor(fb_.color565(130, 140, 190));
-  centerText(fb_, String(n) + " agents connected", W / 2, 68);
-  fb_.setTextSize(1);
+  // Divider between the logo and the cards: violet, fading out towards the sides.
+  for (int x = 24; x < W - 24; x++) {
+    float f = 1.0f - fabsf(x - W / 2) / (W / 2 - 24.0f);
+    fb_.drawPixel(x, 70, fb_.color565(20 + (int)(70 * f), 18 + (int)(48 * f), 40 + (int)(120 * f)));
+  }
   scroll = max(0, min(scroll, maxScroll()));
 
   fb_.setClipRect(0, LIST_Y - 2, W, H - LIST_Y + 2);
