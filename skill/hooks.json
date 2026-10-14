@@ -35,7 +35,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "curl -4 -s -m 2 -X POST \"http://${NEBULADECK_HOST:-nebuladeck.local}/api/hook?event=Notification\" >/dev/null 2>&1 &"
+            "command": "m=$(sed -n 's/.*\"message\" *: *\"\\([^\"]*\\)\".*/\\1/p' | head -n 1); case \"$m\" in *\"waiting for your input\"*) k=idle;; *) k=attn;; esac; curl -4 -s -m 2 -X POST \"http://${NEBULADECK_HOST:-nebuladeck.local}/api/hook?event=Notification&kind=$k\" >/dev/null 2>&1 &"
           }
         ]
       }

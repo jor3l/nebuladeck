@@ -13,6 +13,7 @@ static Ota ota(ui);
 
 static const uint32_t HOLD_MS = 5000;   // long-press on a nebula screen -> WiFi setup
 static const uint32_t SLEEP_MS = 180000;  // no touch and no agent requests for this long -> screen off
+static const uint32_t ATTN_ON_MS = 600000;  // "needs you" keeps the screen lit at most this long
 static const int BRIGHTNESS = 200;
 
 void setup() {
@@ -58,7 +59,11 @@ void loop() {
   static bool asleep = false, swallow = false;
   if (touching) lastTouch = now;
   uint32_t lastActive = (int32_t)(api.lastRequest - lastTouch) > 0 ? api.lastRequest : lastTouch;
-  bool keepOn = ui.net.setup || ui.asking || (conn && ui.attn) || ui.updatePct >= 0;
+  static uint32_t attnSince = 0;
+  bool attn = conn && ui.attn;
+  if (!attn) attnSince = 0;
+  else if (!attnSince) attnSince = now;
+  bool keepOn = ui.net.setup || ui.asking || (attn && now - attnSince < ATTN_ON_MS) || ui.updatePct >= 0;
   bool idle = !keepOn && now - lastActive > SLEEP_MS;
   if (asleep && !idle) {
     asleep = false;

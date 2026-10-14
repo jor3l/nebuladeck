@@ -49,7 +49,7 @@ the screen returns to the idle nebula ("Agent not connected"), and a new session
 | `POST /api/ask_cancel` | `id?` | Remove the open ask (all, or only if `id` matches) |
 | `POST /api/clear` | | Clear messages |
 | `POST /api/ping` | | Keep the session alive |
-| `POST /api/hook?event=E&tool=T&agent=A` | none | Claude Code hook event, mapped to `presence`/`bye` on the device (see Hooks) |
+| `POST /api/hook?event=E&tool=T&kind=K&agent=A` | none | Claude Code hook event, mapped to `presence`/`bye` on the device (see Hooks) |
 | `POST /api/bye` | | End the session: back to the nebula now |
 | `GET /api/info` | | `fw`, `name`, `host`, `ip`, `ssid`, `rssi`, `w`, `h`, `session`, `update?` |
 | `POST /api/update` | | Install the newer release in `update` (409 if none). The device shows progress and reboots |
@@ -90,7 +90,7 @@ is not sent. For `PreToolUse`, `sed` pulls out only `tool_name` and sends it as 
 | `SessionStart` | "Ready", clears a finished screen |
 | `UserPromptSubmit` | "Thinking...", clears a finished screen |
 | `PreToolUse` | By tool: "Running a command...", "Reading...", "Editing...", "Searching...", "Browsing...", "Delegating...", "Planning...", else "Working..." |
-| `Notification` | "Needs you" (amber) |
+| `Notification` | "Needs you" (amber) for permission prompts; with `kind=idle` (Claude Code's "waiting for your input" reminder) a calm "Waiting for you" |
 | `Stop` | "Ready", closes a task card left open |
 | `SessionEnd` | `bye` |
 

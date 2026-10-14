@@ -40,7 +40,7 @@ and miss the moment they need you. NebulaDeck is the glanceable middle ground:
 3. **Sessions.** Each command keeps the session alive. If nothing arrives for 30 minutes, or the agent
    says `bye`, the screen goes back to the idle nebula ("Agent not connected"). After 3 minutes with
    no touch and no agent activity the backlight fades off; a tap or the next agent request wakes it.
-   It stays on while a question is waiting or the agent needs you.
+   It stays on while a question is waiting, and for up to 10 minutes while the agent needs you.
 4. **Updates.** Released devices check GitHub for newer firmware every 12 hours and ask on screen
    before installing (**Update** / **Skip**).
 

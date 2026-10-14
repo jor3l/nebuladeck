@@ -94,6 +94,9 @@ void Api::begin() {
     if (ev == "SessionStart") { in["text"] = "Ready"; in["new_turn"] = true; }
     else if (ev == "UserPromptSubmit") { in["text"] = "Thinking..."; in["new_turn"] = true; }
     else if (ev == "PreToolUse") in["text"] = toolText(server.arg("tool"));
+    // Claude Code notifies both for permission prompts (attn) and, a minute after a turn
+    // ends, "waiting for your input" (kind=idle): calm, not an alarm.
+    else if (ev == "Notification" && server.arg("kind") == "idle") in["text"] = "Waiting for you";
     else if (ev == "Notification") { in["text"] = "Needs you"; in["attn"] = true; }
     else if (ev == "Stop") { in["text"] = "Ready"; in["end_turn"] = true; }
     else if (ev == "SessionEnd") t = "bye";
