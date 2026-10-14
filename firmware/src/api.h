@@ -16,6 +16,7 @@ class Api {
   // than `now`; unsigned, that difference wrapped to ~49 days and ended the session (and its ask).
   bool connected(uint32_t now) const { return lastSeen_ && (int32_t)(now - lastSeen_) < (int32_t)LEASE_MS; }
   void answer(int choice);  // an ask option was tapped
+  uint32_t lastRequest = 0;  // millis() of the last command (wakes a sleeping screen)
   std::function<void()> onForgetWifi;
   std::function<void()> onUpdate;  // install the available release (ui.update)
 

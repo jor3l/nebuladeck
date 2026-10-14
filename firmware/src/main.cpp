@@ -11,13 +11,15 @@ static Net net(ui.net);
 static Api api(ui);
 static Ota ota(ui);
 
-static const uint32_t HOLD_MS = 5000;  // long-press on a nebula screen -> WiFi setup
+static const uint32_t HOLD_MS = 5000;   // long-press on a nebula screen -> WiFi setup
+static const uint32_t SLEEP_MS = 180000;  // no touch and no agent requests for this long -> screen off
+static const int BRIGHTNESS = 200;
 
 void setup() {
   Serial.begin(115200);
   lcd.init();
   lcd.setRotation(2);  // portrait, 320x480, USB port at the bottom
-  lcd.setBrightness(200);
+  lcd.setBrightness(BRIGHTNESS);
   lcd.fillScreen(TFT_BLACK);
   if (!ui.begin()) {
     lcd.setTextColor(TFT_RED);
@@ -47,6 +49,35 @@ void loop() {
   int32_t x, y;
   bool touching = lcd.getTouch(&x, &y);
   bool conn = !ui.net.setup && api.connected(now);
+
+  // Screen sleep: fade the backlight out after SLEEP_MS of no touch and no agent requests,
+  // unless something needs the user. A tap (or any request) wakes it; the waking tap is
+  // swallowed so it can't press anything.
+  static uint32_t lastTouch = 0;
+  static int bright = BRIGHTNESS;
+  static bool asleep = false, swallow = false;
+  if (touching) lastTouch = now;
+  uint32_t lastActive = (int32_t)(api.lastRequest - lastTouch) > 0 ? api.lastRequest : lastTouch;
+  bool keepOn = ui.net.setup || ui.asking || (conn && ui.attn) || ui.updatePct >= 0;
+  bool idle = !keepOn && now - lastActive > SLEEP_MS;
+  if (asleep && !idle) {
+    asleep = false;
+    bright = BRIGHTNESS;
+    lcd.setBrightness(bright);
+    swallow = touching;  // this tap only wakes the screen
+  } else if (!asleep && idle) {
+    // Fade over ~1 s. Backlight only: the panel's sleep mode isn't used, so touch stays live.
+    int b = BRIGHTNESS - (int)((now - lastActive - SLEEP_MS) * BRIGHTNESS / 1000);
+    if (b != bright) lcd.setBrightness(bright = max(0, b));
+    asleep = bright == 0;
+  } else if (!asleep && bright < BRIGHTNESS) {
+    lcd.setBrightness(bright = BRIGHTNESS);  // activity during the fade
+  }
+  if (swallow && !touching) swallow = false;
+  if (asleep || swallow) {
+    down = touching;
+    return;  // no drawing, no touch handling
+  }
   if (touching && ui.onNebula(conn) && !ui.info && !pressed) {
     // Ripple on press, then a trail while dragging.
     static int32_t lx = -100, ly = -100;

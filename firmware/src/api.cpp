@@ -172,6 +172,7 @@ int Api::apply(const char* t, JsonDocument& doc, JsonDocument& out, uint32_t now
   bool known = false;
   for (const char* k : KNOWN) known |= !strcmp(t, k);
   if (!known) return 404;
+  lastRequest = now;
 
   if (!strcmp(t, "bye")) {
     cancelAsk();
