@@ -1,6 +1,6 @@
 name: pages
 
-# Setup page on GitHub Pages: WiFi setup, web flasher with both channels, agent skill. The images are copied from the
+# Setup page on GitHub Pages: WiFi setup, web flasher with both channels, agent skill, stand build guide. The images are copied from the
 # releases because the browser flasher needs them same-origin.
 on:
   workflow_call:
@@ -9,12 +9,14 @@ on:
     branches: [main]
     paths:
       - 'site/**'
+      - 'print/**'
       - 'skill/**'
       - 'tests/**'
       - '.github/workflows/pages.yml'
   pull_request:
     paths:
       - 'site/**'
+      - 'print/**'
       - 'skill/**'
       - 'tests/**'
       - '.github/workflows/pages.yml'
@@ -63,6 +65,7 @@ jobs:
             CH=$ch NAME="$name" python3 scripts/flasher-manifest.py > "site/manifest-$ch.json"
           done
           cp -r skill site/skill   # SKILL.md + hooks.json, downloadable from the page
+          cp -r print site/print   # stand model and assembly photos for "Build your NebulaDeck"
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

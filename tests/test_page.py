@@ -124,9 +124,9 @@ class Navigation(unittest.TestCase):
           const again = { title: $('title').textContent, choices: !document.querySelector('.choices').hidden, back: vis('back'), flash: vis('flash') };
           window.RESULT = { home, flash, again };
         """)
-        self.assertEqual(r["home"], {"title": "Set up your screen", "choices": True, "back": False})
+        self.assertEqual(r["home"], {"title": "Set up your deck", "choices": True, "back": False})
         self.assertEqual(r["flash"], {"title": "Flash device", "choices": False, "back": True, "flash": True, "wifi": False, "hash": "#/flash"})
-        self.assertEqual(r["again"], {"title": "Set up your screen", "choices": True, "back": False, "flash": False})
+        self.assertEqual(r["again"], {"title": "Set up your deck", "choices": True, "back": False, "flash": False})
 
     def test_qr_link_opens_wifi(self):
         r = run("window.RESULT = { title: $('title').textContent, wifi: !$('wifi').hidden };", "?setup=ABCD")
