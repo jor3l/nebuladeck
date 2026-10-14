@@ -42,6 +42,8 @@
   button.primary { color: #04101c; background: linear-gradient(135deg, var(--accent), var(--accent2)); }
   button.primary:disabled { opacity: .5; cursor: default; }
   button.ghost { color: var(--text); background: var(--card2); border: 1px solid var(--line); font-weight: 600; padding: 10px 16px; }
+  .patience { margin: 14px 0 8px; padding: 10px 12px; border-radius: 10px; font-size: 14px;
+    color: var(--warn); background: rgba(255, 207, 138, .07); border: 1px solid #5a4020; }
   .note { display: none; border-color: #7a4a1e; color: var(--warn); }
   code { background: #0b0e22; border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; font-size: 14px; overflow-wrap: anywhere; }
   pre { background: #0b0e22; border: 1px solid var(--line); border-radius: 10px; padding: 12px; overflow-x: auto; font-size: 14px; margin: 8px 0 0; }
@@ -184,6 +186,7 @@
         <span slot="unsupported"></span>
         <span slot="not-allowed"></span>
       </esp-web-install-button>
+      <p class="patience"><strong>Be patient:</strong> installing takes a couple of minutes, and the <em>Erasing</em> step can sit still for a while before progress moves. That's normal. Keep this tab open and the cable connected until it says it's done.</p>
       <p><small>Pick the <code>usbmodem</code> / <code>Espressif</code> port in the browser dialog. Installing replaces whatever is on the board.</small></p>
     </div>
 
