@@ -105,20 +105,20 @@ void loop() {
     listPress = true; ly0 = y; lscroll0 = ui.scroll; lmove = 0;
     x0List = x; y0List = y;  // before the drag check below, which measures from here
   }
-  static int8_t gesture = 0;  // 0 undecided, 1 scrolling, 2 swiping a card right
+  static int8_t gesture = 0;  // 0 undecided, 1 scrolling, 2 swiping a card sideways (either way)
   if (listPress && touching) {
     int32_t dx = x - x0List, dy = y - ly0;
     lmove = max(lmove, max((int32_t)abs(dx), (int32_t)abs(dy)));
     if (!gesture && lmove > 12) {
       int c = ui.hitCard(x0List, y0List);
-      gesture = dx > 0 && abs(dx) > abs(dy) && c >= 0 ? 2 : 1;
+      gesture = abs(dx) > abs(dy) && c >= 0 ? 2 : 1;
       if (gesture == 2) ui.swipeIdx = c;
     }
     if (gesture == 1) ui.scroll = max(0, min((int)(lscroll0 - dy), ui.maxScroll()));
-    if (gesture == 2) ui.swipeDx = max(0, (int)dx);
+    if (gesture == 2) ui.swipeDx = dx;
   } else if (listPress) {  // released
     listPress = false;
-    if (gesture == 2 && ui.swipeDx > 110 && ui.swipeIdx >= 0) api.dismiss(ui.agents[ui.swipeIdx]);
+    if (gesture == 2 && abs(ui.swipeDx) > 110 && ui.swipeIdx >= 0) api.dismiss(ui.agents[ui.swipeIdx]);
     else if (!gesture) { int c = ui.hitCard(x0List, y0List); if (c >= 0) { ui.focus = c; ui.info = false; } }
     ui.swipeIdx = -1;
     ui.swipeDx = 0;

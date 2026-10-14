@@ -37,8 +37,8 @@ The device keeps up to 8 agents, each identified by `agent` + `project` (e.g. "C
 "nebuladeck"), with its own status, task, activity history (12 entries), question and summary.
 Send both in every request. A request with a known `agent` but no `project` goes to the most
 recently active agent of that name. An agent is dropped after 30 minutes without requests or
-on `bye`; with all 8 slots taken, the least recently seen one is replaced. Swiping a card to the
-right removes it (and cancels its question); the agent's next request brings it back.
+on `bye`; with all 8 slots taken, the least recently seen one is replaced. Swiping a card sideways
+(either way) removes it (and cancels its question); the agent's next request brings it back.
 
 Agents survive restarts (power loss, flashing, updates): the device saves them to flash at most
 every 5 s and restores them at boot, questions included. With no clock it can't tell how long it

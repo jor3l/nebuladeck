@@ -81,7 +81,7 @@ class Ui {
   Agent agents[MAXAGENTS];
   int focus = -1;   // with several agents: the one opened from its card, -1 = the card list
   int scroll = 0;   // card list scroll offset, px
-  int swipeIdx = -1, swipeDx = 0;  // a card being swiped right to dismiss it
+  int swipeIdx = -1, swipeDx = 0;  // a card being swiped sideways (either way) to dismiss it
   int count() const;
   // The agent the detail screens show: the only one, or the focused one. nullptr = card list.
   Agent* view();
