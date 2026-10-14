@@ -16,7 +16,7 @@ class Fake(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         u = urllib.parse.urlparse(self.path)
         n = int(self.headers.get("Content-Length") or 0)
-        Fake.seen.append({"path": u.path, "query": dict(urllib.parse.parse_qsl(u.query)),
+        Fake.seen.append({"path": u.path, "query": dict(urllib.parse.parse_qsl(u.query, keep_blank_values=True)),
                           "body": self.rfile.read(n).decode() if n else ""})
         self.send_response(200)
         self.end_headers()
@@ -56,7 +56,8 @@ class Hooks(unittest.TestCase):
         return Fake.seen[0] if Fake.seen else None, took
 
     def test_all_events_are_installed(self):
-        self.assertEqual(set(HOOKS), {"SessionStart", "UserPromptSubmit", "PreToolUse", "Notification", "SubagentStop", "Stop", "SessionEnd"})
+        self.assertEqual(set(HOOKS), {"SessionStart", "UserPromptSubmit", "PreToolUse", "Notification", "SubagentStart",
+                                      "SubagentStop", "Stop", "SessionEnd"})
 
     def test_each_event_sends_its_name_and_project(self):
         for ev in HOOKS:
@@ -83,6 +84,18 @@ class Hooks(unittest.TestCase):
             if old is not None:
                 os.environ["CLAUDE_PROJECT_DIR"] = old
 
+    def test_subagent_events_carry_its_id_and_type_and_the_real_project(self):
+        # Subagents run in worktrees: .../<project>/.claude/worktrees/agent-<id>.
+        req, _ = self.run_hook("PreToolUse", {"cwd": "/Users/someone/Development/flightsim/.claude/worktrees/agent-a493",
+                                              "agent_id": "a493f7563415dd6b0", "agent_type": "general-purpose",
+                                              "tool_name": "Bash", "tool_input": {"agent_id": "nope", "agent_type": "nope"}})
+        q = req["query"]
+        self.assertEqual((q["project"], q["sub"], q["role"], q["tool"]), ("flightsim", "a493f7563415dd6b0", "general-purpose", "Bash"))
+
+    def test_session_events_have_no_sub(self):
+        req, _ = self.run_hook("Stop", {"cwd": "/Users/someone/Development/flightsim"})
+        self.assertEqual((req["query"]["sub"], req["query"]["role"]), ("", ""))
+
     def test_tool_name_and_nested_traps(self):
         # tool_input may nest keys called cwd/tool_name: the top-level ones (first) must win.
         req, _ = self.run_hook("PreToolUse", {"cwd": CWD, "hook_event_name": "PreToolUse", "tool_name": "Edit",
@@ -97,7 +110,7 @@ class Hooks(unittest.TestCase):
                                               "tool_input": {"file_path": "/x", "content": secret}})
         self.assertEqual(req["body"], "")
         self.assertNotIn(secret, json.dumps(req))
-        self.assertEqual(set(req["query"]), {"event", "project", "tool"})
+        self.assertEqual(set(req["query"]), {"event", "project", "sub", "role", "tool"})
 
     def test_notification_idle_vs_needs_you(self):
         req, _ = self.run_hook("Notification", {"cwd": CWD, "message": "Claude is waiting for your input"})

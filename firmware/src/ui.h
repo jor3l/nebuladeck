@@ -37,6 +37,7 @@ struct Agent {
   static constexpr int MAXOPT = 4;
   bool used = false;
   String name, project;
+  String sub, role;       // a subagent: its id (empty for a session) and type ("Explore", "general-purpose")
   uint32_t lastSeen = 0;  // millis() of its last request; the lease runs from here
   bool restored = false;  // loaded after a restart and not heard from since
   // Task.
@@ -56,7 +57,6 @@ struct Agent {
   int askChoice = -1;
   // Presence (no task): secondary line on the nebula.
   String presence;
-  uint8_t subagents = 0;  // agents it launched that are still running (hooks: Agent/Task tool, SubagentStop)
   bool attn = false;
   // Finished task: summary and token card.
   bool completed = false;
@@ -75,7 +75,7 @@ struct Agent {
 
 class Ui {
  public:
-  static constexpr int MAXAGENTS = 8;
+  static constexpr int MAXAGENTS = 10;
   static constexpr int MAXOPT = Agent::MAXOPT;
 
   Agent agents[MAXAGENTS];
@@ -83,6 +83,9 @@ class Ui {
   int scroll = 0;   // card list scroll offset, px
   int swipeIdx = -1, swipeDx = 0;  // a card being swiped sideways (either way) to dismiss it
   int count() const;
+  // Running subagent cards of a session (same name and project, with a sub id).
+  int children(const Agent& parent) const;
+  static String displayName(const Agent& a) { return a.role.length() ? a.name + " · " + a.role : a.name; }
   // The agent the detail screens show: the only one, or the focused one. nullptr = card list.
   Agent* view();
   const Agent* view() const;

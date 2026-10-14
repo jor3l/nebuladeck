@@ -61,11 +61,14 @@ static const char* toolText(const String& t) {
 Agent* Api::resolve(JsonDocument& doc, uint32_t now, bool create) {
   String name = doc["agent"].is<const char*>() ? doc["agent"].as<String>() : String();
   String project = doc["project"].is<const char*>() ? doc["project"].as<String>() : String();
+  String sub = doc["sub"].is<const char*>() ? doc["sub"].as<String>() : String();
   if (name.length() > 32) name.remove(32);
   if (project.length() > 48) project.remove(48);
+  if (sub.length() > 40) sub.remove(40);
   Agent* best = nullptr;
   for (Agent& a : ui_.agents) {
     if (!a.used) continue;
+    if (a.sub != sub) continue;  // a session and its subagents are separate cards
     if (name.length() && !a.name.equalsIgnoreCase(name)) continue;
     bool exact = project.length() && a.project == project;
     if (project.length() && a.project.length() && !exact) continue;
@@ -89,9 +92,27 @@ Agent* Api::resolve(JsonDocument& doc, uint32_t now, bool create) {
   slot->used = true;
   slot->name = name.length() ? name : String("Agent");
   slot->project = project;
+  slot->sub = sub;
+  if (sub.length()) slot->role = doc["role"].is<const char*>() ? doc["role"].as<String>().substring(0, 24) : String("agent");
   slot->lastSeen = now;
   note("new " + slot->name + " / " + slot->project);
   return slot;
+}
+
+String Api::working(int n) { return n > 1 ? String(n) + " agents working..." : String("An agent is working..."); }
+
+// A subagent came or went: keep its session alive and its "agents working" line current.
+void Api::refreshParent(JsonDocument& sub, uint32_t now) {
+  JsonDocument p;
+  p["agent"] = sub["agent"];
+  if (sub["project"].is<const char*>()) p["project"] = sub["project"];
+  Agent* parent = resolve(p, now, false);
+  if (!parent) return;
+  parent->lastSeen = now;
+  int kids = ui_.children(*parent);
+  bool showsWorking = parent->presence.endsWith("agents working...") || parent->presence == "An agent is working...";
+  if (showsWorking) parent->presence = kids ? working(kids) : String("Ready");
+  ui_.dirty = true;
 }
 
 Agent* Api::findAsk(const String& id) {
@@ -141,36 +162,49 @@ void Api::begin() {
   // The event body is never needed (it can hold whole files), so hooks send none.
   server.on("/api/hook", HTTP_POST, [this] {
     requests_++;
-    String ev = server.arg("event");
-    String tool = server.arg("tool");
+    String ev = server.arg("event"), tool = server.arg("tool"), sub = server.arg("sub");
     JsonDocument in, out;
     const char* t = "presence";
     in["agent"] = server.hasArg("agent") ? server.arg("agent") : "Claude";  // the hook format is Claude Code's
     if (server.arg("project").length()) in["project"] = server.arg("project");
-    // Launched agents keep running after the session's own turn ends (Stop, then the idle
-    // reminder): while any do, the session reads as working, not "Ready" / "Waiting for you".
-    Agent* known = resolve(in, millis(), false);
-    uint8_t subs = known ? known->subagents : 0;
-    String working = subs > 1 ? String(subs) + " agents working..." : String("An agent is working...");
+    uint32_t now = millis();
+    out["ok"] = true;
+
+    // Inside a subagent (Claude Code adds agent_id / agent_type): its own card, under its session.
+    if (sub.length()) {
+      in["sub"] = sub;
+      if (server.arg("role").length()) in["role"] = server.arg("role");
+      if (ev == "SubagentStop") {
+        if (Agent* c = resolve(in, now, false)) { cancelAsk(*c, "subagent done"); note("done " + Ui::displayName(*c)); c->clear(); ui_.dirty = true; }
+        lastRequest = now;
+        refreshParent(in, now);
+        return send(200, out);
+      }
+      if (ev == "SubagentStart") in["text"] = "Starting...";
+      else if (ev == "PreToolUse") in["text"] = toolText(tool);
+      else if (ev == "Notification" && server.arg("kind") != "idle") { in["text"] = "Needs you"; in["attn"] = true; }
+      else in["text"] = "Working...";
+      apply("presence", in, out, now);
+      refreshParent(in, now);
+      return send(200, out);
+    }
+
+    // The session itself. Its subagents keep running after its own turn ends (Stop, then the
+    // idle reminder): while any do, it reads as working, not "Ready" / "Waiting for you".
+    Agent* known = resolve(in, now, false);
+    int kids = known ? ui_.children(*known) : 0;
     if (ev == "SessionStart") { in["text"] = "Ready"; in["new_turn"] = true; }
     else if (ev == "UserPromptSubmit") { in["text"] = "Thinking..."; in["new_turn"] = true; }
     else if (ev == "PreToolUse") in["text"] = toolText(tool);
-    else if (ev == "SubagentStop") in["text"] = subs > 1 ? (subs - 1 > 1 ? String(subs - 1) + " agents working..." : String("An agent is working...")) : String("Ready");
     // Claude Code notifies both for permission prompts (attn) and, a minute after a turn
     // ends, "waiting for your input" (kind=idle): calm, not an alarm.
-    else if (ev == "Notification" && server.arg("kind") == "idle") in["text"] = subs ? working : String("Waiting for you");
+    else if (ev == "Notification" && server.arg("kind") == "idle") in["text"] = kids ? working(kids) : String("Waiting for you");
     else if (ev == "Notification") { in["text"] = "Needs you"; in["attn"] = true; }
-    else if (ev == "Stop") { in["text"] = subs ? working : String("Ready"); in["end_turn"] = true; }
+    else if (ev == "Stop") { in["text"] = kids ? working(kids) : String("Ready"); in["end_turn"] = true; }
     else if (ev == "SessionEnd") t = "bye";
+    else if (ev == "SubagentStart" || ev == "SubagentStop") return send(200, out);  // no agent_id (older Claude Code)
     else return sendError(400, "unknown event");
-    out["ok"] = true;
-    uint32_t now = millis();
-    apply(t, in, out, now);
-    if (Agent* a = resolve(in, now, false)) {
-      if (ev == "PreToolUse" && (tool == "Agent" || tool == "Task") && a->subagents < 9) a->subagents++;
-      else if (ev == "SubagentStop" && a->subagents) a->subagents--;
-      else if (ev == "SessionStart") a->subagents = 0;  // a fresh session (SessionEnd drops the agent)
-    }
+    apply(t, in, out, now);  // SessionEnd -> bye, which also removes the session's subagents
     // During a task, tool steps also go into its activity list (without the "...").
     Agent* a = ev == "PreToolUse" ? resolve(in, now, false) : nullptr;
     if (a && !a->completed && a->status != ST_IDLE) {
@@ -195,7 +229,8 @@ void Api::poll(uint32_t now) {
     if (!a.used) continue;
     // Signed: requests handled inside poll(now) stamp lastSeen with a slightly later
     // millis() than `now`; unsigned, that wrapped to ~49 days and dropped the agent.
-    if ((int32_t)(now - a.lastSeen) >= (int32_t)LEASE_MS) { cancelAsk(a, "lease"); note("drop " + a.name); a.clear(); ui_.dirty = true; continue; }
+    uint32_t lease = a.sub.length() ? SUB_LEASE_MS : LEASE_MS;  // a missed SubagentStop shouldn't linger
+    if ((int32_t)(now - a.lastSeen) >= (int32_t)lease) { cancelAsk(a, "lease"); note("drop " + a.name); a.clear(); ui_.dirty = true; continue; }
     if (a.askState == ASK_PENDING && a.askDeadline && (int32_t)(now - a.askDeadline) >= 0) cancelAsk(a, "deadline");
   }
 }
@@ -245,7 +280,9 @@ void Api::info() {
     o["asking"] = a.asking;
     o["restored"] = a.restored;
     o["attn"] = a.attn;
-    o["subagents"] = a.subagents;
+    o["sub"] = a.sub;
+    o["role"] = a.role;
+    o["subagents"] = ui_.children(a);
     o["completed"] = a.completed;
     o["activity"] = a.nmsg;
     if (a.nmsg) o["last"] = a.msgs[0].text;
@@ -295,8 +332,21 @@ int Api::apply(const char* t, JsonDocument& doc, JsonDocument& out, uint32_t now
   lastRequest = now;
   ui_.dirty = true;
 
-  if (!strcmp(t, "bye")) {  // this agent leaves; the others stay
-    if (Agent* a = resolve(doc, now, false)) { cancelAsk(*a, "bye"); note("bye " + a->name); a->clear(); }
+  if (!strcmp(t, "bye")) {  // this agent leaves (with its subagents, if it's a session); the others stay
+    // A session's subagents go with it, even if the session itself never got a card.
+    if (!doc["sub"].is<const char*>()) {
+      String name = doc["agent"] | "", project = doc["project"] | "";
+      for (Agent& c : ui_.agents)
+        if (c.used && c.sub.length() && (!name.length() || c.name.equalsIgnoreCase(name)) && (!project.length() || c.project == project)) {
+          cancelAsk(c, "session ended");
+          c.clear();
+        }
+    }
+    if (Agent* a = resolve(doc, now, false)) {
+      cancelAsk(*a, "bye");
+      note("bye " + a->name);
+      a->clear();
+    }
     return 200;
   }
   if (!strcmp(t, "ask_cancel")) {

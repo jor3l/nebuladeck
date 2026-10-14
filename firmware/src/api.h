@@ -8,6 +8,7 @@
 class Api {
  public:
   static constexpr uint32_t LEASE_MS = 30UL * 60 * 1000;  // no requests for this long -> idle nebula
+  static constexpr uint32_t SUB_LEASE_MS = 10UL * 60 * 1000;  // a subagent card without events
 
   explicit Api(Ui& ui) : ui_(ui) {}
   void begin();
@@ -29,6 +30,8 @@ class Api {
   Agent* resolve(JsonDocument& doc, uint32_t now, bool create);
   Agent* findAsk(const String& id);
   void cancelAsk(Agent& a, const char* why);
+  void refreshParent(JsonDocument& sub, uint32_t now);
+  static String working(int n);
   // Recent events for debugging (why questions ended, agents came and went); in /api/info.
   static constexpr int LOGN = 12;
   String log_[LOGN];

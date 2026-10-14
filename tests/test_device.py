@@ -177,27 +177,44 @@ class Device(unittest.TestCase):
         hook("Notification", agent="E2E-C", project="e2e")
         self.assertTrue(agents()["E2E-C"]["attn"])
 
-    def test_launched_agents_keep_the_session_busy(self):
-        # Regression: a session that launched an agent read "Waiting for you" while it worked.
+    def test_subagents_get_their_own_cards(self):
+        # Regression: two subagents showed as one card ("Running a command..." on the parent),
+        # and the parent read "Waiting for you" while they worked.
         hook("UserPromptSubmit", agent="E2E-C", project="e2e")
         hook("PreToolUse", agent="E2E-C", project="e2e", tool="Agent")
-        hook("PreToolUse", agent="E2E-C", project="e2e", tool="Agent")
+        hook("SubagentStart", agent="E2E-C", project="e2e", sub="s1", role="Explore")
+        hook("SubagentStart", agent="E2E-C", project="e2e", sub="s2", role="general-purpose")
+        hook("PreToolUse", agent="E2E-C", project="e2e", sub="s1", role="Explore", tool="Read")
+        hook("PreToolUse", agent="E2E-C", project="e2e", sub="s2", role="general-purpose", tool="Bash")
         hook("Stop", agent="E2E-C", project="e2e")  # the session's own turn ends
-        c = agents()["E2E-C"]
-        self.assertEqual((c["subagents"], c["line"], c["label"]), (2, "2 agents working...", "ACTIVE"))
-        hook("Notification", agent="E2E-C", project="e2e", kind="idle")  # the idle reminder
-        self.assertEqual(agents()["E2E-C"]["line"], "2 agents working...")
-        hook("SubagentStop", agent="E2E-C", project="e2e")
-        self.assertEqual(agents()["E2E-C"]["line"], "An agent is working...")
-        hook("SubagentStop", agent="E2E-C", project="e2e")
-        c = agents()["E2E-C"]
-        self.assertEqual((c["subagents"], c["line"], c["label"]), (0, "Ready", "READY"))
-        hook("Notification", agent="E2E-C", project="e2e", kind="idle")
-        self.assertEqual(agents()["E2E-C"]["line"], "Waiting for you")
-        # A permission prompt still needs the user, agents running or not.
-        hook("PreToolUse", agent="E2E-C", project="e2e", tool="Agent")
-        hook("Notification", agent="E2E-C", project="e2e")
-        self.assertEqual(agents()["E2E-C"]["label"], "NEEDS YOU")
+        hook("Notification", agent="E2E-C", project="e2e", kind="idle")  # and the idle reminder
+        cards = [a for a in call("/info")[1]["agents"] if a["project"] == "e2e"]
+        parent = [a for a in cards if not a["sub"]][0]
+        kids = {a["sub"]: a for a in cards if a["sub"]}
+        self.assertEqual((parent["subagents"], parent["line"], parent["label"]), (2, "2 agents working...", "ACTIVE"))
+        self.assertEqual((kids["s1"]["role"], kids["s1"]["line"]), ("Explore", "Reading..."))
+        self.assertEqual((kids["s2"]["role"], kids["s2"]["line"]), ("general-purpose", "Running a command..."))
+        # Each subagent's card comes right after its session's.
+        order = [a["sub"] or "parent" for a in cards]
+        self.assertEqual(order[0], "parent")
+        hook("SubagentStop", agent="E2E-C", project="e2e", sub="s1", role="Explore")
+        cards = [a for a in call("/info")[1]["agents"] if a["project"] == "e2e"]
+        self.assertEqual(sorted(a["sub"] for a in cards), ["", "s2"])
+        self.assertEqual([a for a in cards if not a["sub"]][0]["line"], "An agent is working...")
+        hook("SubagentStop", agent="E2E-C", project="e2e", sub="s2", role="general-purpose")
+        cards = [a for a in call("/info")[1]["agents"] if a["project"] == "e2e"]
+        self.assertEqual([(a["sub"], a["line"], a["label"]) for a in cards], [("", "Ready", "READY")])
+
+    def test_a_subagent_needing_you_marks_its_own_card(self):
+        hook("SubagentStart", agent="E2E-C", project="e2e", sub="s3", role="Explore")
+        hook("Notification", agent="E2E-C", project="e2e", sub="s3", role="Explore")
+        kid = [a for a in call("/info")[1]["agents"] if a["sub"] == "s3"][0]
+        self.assertEqual(kid["label"], "NEEDS YOU")
+
+    def test_session_end_removes_its_subagents(self):
+        hook("SubagentStart", agent="E2E-C", project="e2e", sub="s4", role="Explore")
+        hook("SessionEnd", agent="E2E-C", project="e2e")
+        self.assertEqual([a for a in call("/info")[1]["agents"] if a["project"] == "e2e"], [])
 
     def test_tool_steps_feed_a_running_task(self):
         post("state", {"agent": "E2E-C", "project": "e2e", "status": "working", "title": "Task"})
@@ -245,6 +262,7 @@ class Device(unittest.TestCase):
             except OSError:
                 time.sleep(1)
         self.assertLess(info["uptime_s"], 60, "the device didn't restart")
+        time.sleep(5)  # answering already, but still settling on the network
         type(self).uptime = info["uptime_s"]  # expected, not a crash
         a = agents()
         self.assertEqual(a["E2E-A"]["line"], "Before the restart")

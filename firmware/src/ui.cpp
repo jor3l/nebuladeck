@@ -208,6 +208,13 @@ String Agent::line() const {
   return presence.length() ? presence : String("Ready");
 }
 
+int Ui::children(const Agent& p) const {
+  int n = 0;
+  for (const Agent& a : agents)
+    n += a.used && a.sub.length() && !p.sub.length() && a.name.equalsIgnoreCase(p.name) && a.project == p.project;
+  return n;
+}
+
 int Ui::count() const {
   int n = 0;
   for (const Agent& a : agents) n += a.used;
@@ -307,7 +314,7 @@ void Ui::drawPresence(uint32_t now) {
 
   fb_.setFont(&fonts::FreeSansBold12pt7b);
   fb_.setTextColor(fb_.color565(240, 243, 255));
-  centerText(fb_, a.name + " connected", W / 2, cy + 58);
+  centerText(fb_, a.sub.length() ? displayName(a) : a.name + " connected", W / 2, cy + 58);
 
   // Secondary line; a trailing "..." animates.
   String text = a.presence.length() ? a.presence : "Ready";
@@ -704,14 +711,29 @@ const char* Ui::cardLabel(const Agent& a) {
          : a.status != ST_IDLE ? statusLabel(a.status) : busy(a) ? "ACTIVE" : "READY";
 }
 
+// Sessions by attention (needs you, busy, the rest), each followed by its own subagents.
 int Ui::cardOrder(int* idx) const {
+  auto rank = [](const Agent& a) { return a.needsYou() ? 0 : busy(a) ? 1 : 2; };
+  auto parentOf = [&](const Agent& c) -> int {
+    for (int i = 0; i < MAXAGENTS; i++) {
+      const Agent& p = agents[i];
+      if (p.used && !p.sub.length() && p.name.equalsIgnoreCase(c.name) && p.project == c.project) return i;
+    }
+    return -1;
+  };
   int n = 0;
   for (int pass = 0; pass < 3; pass++)
     for (int i = 0; i < MAXAGENTS; i++) {
       const Agent& a = agents[i];
-      if (!a.used) continue;
-      int rank = a.needsYou() ? 0 : busy(a) ? 1 : 2;
-      if (rank == pass) idx[n++] = i;
+      if (!a.used || rank(a) != pass) continue;
+      if (a.sub.length() && parentOf(a) >= 0) continue;  // listed under its session below
+      idx[n++] = i;
+      if (a.sub.length()) continue;
+      for (int cp = 0; cp < 3; cp++)
+        for (int j = 0; j < MAXAGENTS; j++) {
+          const Agent& c = agents[j];
+          if (c.used && c.sub.length() && rank(c) == cp && parentOf(c) == i) idx[n++] = j;
+        }
     }
   return n;
 }
@@ -741,6 +763,7 @@ void Ui::drawAgents(uint32_t now) {
   for (int k = 0; k < nc; k++) {
     const Agent& a = agents[idx[k]];
     int x = 12, w = W - 24, y = LIST_Y + k * (CARD_H + CARD_GAP) - scroll;
+    if (a.sub.length()) { x += 18; w -= 18; }  // a subagent, under its session
     if (idx[k] == swipeIdx) x += swipeDx;  // follows the finger while swiped
     if (y > H || y + CARD_H < LIST_Y) continue;
     bool hot = a.needsYou();
@@ -767,7 +790,7 @@ void Ui::drawAgents(uint32_t now) {
     fb_.drawString(label, x + w - 14, y + 24);
     fb_.setTextDatum(middle_left);
     fb_.setTextColor(fb_.color565(240, 243, 255));
-    String who = fit(fb_, a.name, w - 70 - lw);
+    String who = fit(fb_, displayName(a), w - 70 - lw);
     fb_.drawString(who, x + 44, y + 24);
     if (a.project.length()) {
       int ww = fb_.textWidth(who);

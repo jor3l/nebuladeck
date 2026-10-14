@@ -33,11 +33,11 @@ have `error`.
 
 ### Several agents
 
-The device keeps up to 8 agents, each identified by `agent` + `project` (e.g. "Claude" in
+The device keeps up to 10 agents, each identified by `agent` + `project` (e.g. "Claude" in
 "nebuladeck"), with its own status, task, activity history (12 entries), question and summary.
 Send both in every request. A request with a known `agent` but no `project` goes to the most
 recently active agent of that name. An agent is dropped after 30 minutes without requests or
-on `bye`; with all 8 slots taken, the least recently seen one is replaced. Swiping a card sideways
+on `bye`; with all 10 slots taken, the least recently seen one is replaced. Swiping a card sideways
 (either way) removes it (and cancels its question); the agent's next request brings it back.
 
 Agents survive restarts (power loss, flashing, updates): the device saves them to flash at most
@@ -70,7 +70,7 @@ the screen returns to the idle nebula ("Agent not connected"), and a new session
 | `POST /api/ask_cancel` | `id?` | Remove the open ask (all, or only if `id` matches) |
 | `POST /api/clear` | | Clear messages |
 | `POST /api/ping` | | Keep the session alive |
-| `POST /api/hook?event=E&tool=T&kind=K&project=P&agent=A` | none | Claude Code hook event, mapped to `presence`/`bye` on the device (see Hooks) |
+| `POST /api/hook?event=E&tool=T&kind=K&project=P&sub=S&role=R&agent=A` | none | Claude Code hook event, mapped to `presence`/`bye` on the device (see Hooks) |
 | `POST /api/bye` | | End the session: back to the nebula now |
 | `GET /api/info` | | `fw`, `name`, `host`, `ip`, `ssid`, `rssi`, `w`, `h`, `session`, `update?`, `agents` (in card order: `agent`, `project`, `label`, `line`, `status`, `asking`, `attn`, `completed`, `activity`, `last`), `max_agents`, and diagnostics: `uptime_s`, `heap`, `wifi_sleep`, `wifi_drops`, `silent_clients`, `requests`, `frame_ms`, `frame_max_ms`, `log` |
 | `POST /api/update` | | Install the newer release in `update` (409 if none). The device shows progress and reboots |
@@ -113,14 +113,18 @@ is not sent. For `PreToolUse`, `sed` pulls out only `tool_name` and sends it as 
 | `UserPromptSubmit` | "Thinking...", clears a finished screen |
 | `PreToolUse` | By tool: "Running a command...", "Reading...", "Editing...", "Searching...", "Browsing...", "Delegating...", "Planning...", else "Working..." |
 | `Notification` | "Needs you" (amber) for permission prompts; with `kind=idle` (Claude Code's "waiting for your input" reminder) a calm "Waiting for you" |
-| `SubagentStop` | One launched agent finished (see below) |
+| `SubagentStart` / `SubagentStop` | A subagent card appears / goes (see below) |
 | `Stop` | "Ready", closes a task card left open |
 | `SessionEnd` | `bye` |
 
-Launched agents: a `PreToolUse` for the `Agent` (or `Task`) tool counts one more running agent
-for that session, `SubagentStop` one fewer. While any run, the session's own `Stop` and the idle
-reminder read "An agent is working..." / "N agents working..." (ACTIVE) instead of "Ready" /
-"Waiting for you"; a permission prompt still shows "Needs you". `SessionStart` resets the count.
+Subagents: events fired inside a subagent carry Claude Code's `agent_id` / `agent_type`, which the
+hooks send as `sub` / `role`. Each running subagent gets its own card ("Claude · Explore"), listed
+indented under its session, with its own status line and permission prompts. `SubagentStart` creates
+it, `SubagentStop` removes it, and so does the session's `SessionEnd` (or any `bye` for the session).
+A subagent card without events for 10 minutes is dropped. While a session has subagent cards, its own
+`Stop` and idle reminder read "An agent is working..." / "N agents working..." (ACTIVE) instead of
+"Ready" / "Waiting for you". Subagents run in worktrees (`<project>/.claude/worktrees/agent-<id>`);
+the hooks report `<project>`.
 
 An explicit task (`state working`) takes over the screen while it runs; during a task,
 `PreToolUse` steps also appear in its activity list as one dim line ("Editing x3"), under
