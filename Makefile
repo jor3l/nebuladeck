@@ -3,7 +3,7 @@
 PORT ?= $(shell pio device list 2>/dev/null | awk '/^\/dev\//{p=$$0} /VID:PID=303A/{print p; exit}')
 FW   := firmware
 
-.PHONY: build flash monitor run clean port demo install
+.PHONY: build flash monitor run clean port demo install image
 
 build:
 	cd $(FW) && pio run -e sc01plus
@@ -39,3 +39,7 @@ install:
 	mkdir -p $$HOME/.claude/skills
 	ln -sfn "$$(pwd)/skill" $$HOME/.claude/skills/nebuladeck
 	@echo "Installed. Try: nebuladeck status"
+
+# One flashable image (dist/nebuladeck-sc01plus.bin), same as the CI release asset.
+image: build
+	ESPTOOL="$$(head -1 $$(which pio) | sed 's/^#!//') $$HOME/.platformio/packages/tool-esptoolpy/esptool.py" ./scripts/merge-firmware.sh

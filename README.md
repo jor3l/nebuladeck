@@ -41,10 +41,22 @@ host/  daemon + CLI (Node)  ──USB CDC serial, newline-delimited JSON──�
 | Idle | no host heartbeat for 3 s | nebula animation + "Agent not connected" |
 | Connected | host heartbeat | status UI (project, state, messages, actions) |
 
+## Hardware
+
+- **Panlee / Wireless-Tag SC01 Plus** (ESP32-S3, 3.5" 320x480 capacitive touch, ST7796 + FT6336). Also sold as WT32-SC01 Plus.
+- A USB-C **data** cable. No drivers needed on macOS: the board is a standard USB serial device.
+- The board has only a reset button. To flash it, jumper **BOOT** to **GND** on the DEBUG header
+  and press **RST** (download mode), then remove the jumper and press RST again.
+
 ## Quick start
 
-See [docs/SETUP-MAC.md](docs/SETUP-MAC.md). In short: `make flash`, `make install`, then
+See [docs/SETUP-MAC.md](docs/SETUP-MAC.md). In short: flash the firmware (`make flash` from source,
+or `nebuladeck flash` with a prebuilt release image), `make install`, then
 `nebuladeck state working "Hello"`.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). MIT licensed.
 
 ## Status
 

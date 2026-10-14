@@ -1,7 +1,7 @@
+*.log
 .DS_Store
 .pio/
 .vscode/
-node_modules/
-dist/
 build/
-*.log
+dist/
+node_modules/

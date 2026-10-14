@@ -11,6 +11,7 @@ const USAGE = `nebuladeck <command>
   ask "<prompt>" <option> [option...] [--timeout SECONDS]   (prints the tapped option)
   done "<summary>" [--tokens-in N --tokens-out N] [--no-tokens] [--duration S] [--transcript FILE]
   clear | bye | status | stop
+  flash [--file image.bin] [--tag vX.Y.Z] [--port PORT]   write the firmware (board in download mode)
 
 Without a device every command exits 0 (add --strict to fail). ask exits
 2 on timeout and 3 when no device could be asked.`;
@@ -24,7 +25,7 @@ const { values: v, positionals: pos } = parseArgs({
     project: { type: 'string' }, progress: { type: 'string' }, level: { type: 'string' },
     ttl: { type: 'string' }, timeout: { type: 'string' }, 'tokens-in': { type: 'string' },
     'tokens-out': { type: 'string' }, 'no-tokens': { type: 'boolean' }, duration: { type: 'string' },
-    transcript: { type: 'string' }, strict: { type: 'boolean' }, help: { type: 'boolean', short: 'h' },
+    transcript: { type: 'string' }, file: { type: 'string' }, tag: { type: 'string' }, port: { type: 'string' }, strict: { type: 'boolean' }, help: { type: 'boolean', short: 'h' },
   },
 });
 
@@ -70,6 +71,11 @@ async function main() {
     case 'clear': case 'bye': case 'stop':
       req = { cmd };
       break;
+    case 'flash': {
+      const { flash } = await import('../src/flash.js');
+      await flash({ file: v.file, tag: v.tag, port: v.port });
+      return;
+    }
     case 'status': {
       try {
         const r = await request({ cmd }, { autostart: false });

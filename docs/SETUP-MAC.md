@@ -17,6 +17,13 @@ Always flash the latest `main` first.
 `make flash` finds the board by its Espressif USB id (303A), so it never picks another
 serial device. Override with `make flash PORT=/dev/cu.usbmodemXXXX`.
 
+Without PlatformIO, use the prebuilt image from the GitHub Releases page instead
+(needs `esptool`: `pipx install esptool`). After step 2 below:
+
+```bash
+nebuladeck flash            # latest release; or: nebuladeck flash --file nebuladeck-sc01plus.bin
+```
+
 ## 2. Install the CLI
 
 ```bash
