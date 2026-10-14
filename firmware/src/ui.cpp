@@ -728,8 +728,10 @@ void Ui::drawAgents(uint32_t now) {
   header(now);
   int n = count();
   fb_.setFont(&fonts::FreeSans9pt7b);
-  fb_.setTextColor(fb_.color565(150, 160, 210));
-  centerText(fb_, String(n) + " agents connected", W / 2, 70);
+  fb_.setTextSize(0.8f);  // smaller than the logo above it
+  fb_.setTextColor(fb_.color565(130, 140, 190));
+  centerText(fb_, String(n) + " agents connected", W / 2, 68);
+  fb_.setTextSize(1);
   scroll = max(0, min(scroll, maxScroll()));
 
   fb_.setClipRect(0, LIST_Y - 2, W, H - LIST_Y + 2);
