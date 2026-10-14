@@ -141,7 +141,6 @@ class Ui {
   void drawBack();
   void header(uint32_t now);  // nebula background + the NEBULADECK logo (animated position)
   float headerK_ = 0;         // logo: 0 = centred, 1 = small at the top left
-  uint32_t headerAt_ = 0;
   static constexpr int W_ = 320;
 
   LGFX_Device& lcd_;

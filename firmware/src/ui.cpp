@@ -247,17 +247,13 @@ int Ui::hitAsk(int px, int py) const {
   return -1;
 }
 
-// Nebula background and the NEBULADECK logo. When "All agents" is showing, the logo eases to
-// the top left at ~70% size (and back), so both have their own tap area.
+// Nebula background and the NEBULADECK logo. When "All agents" is showing, the logo sits at
+// the top left at ~70% size, so both have their own tap area.
 void Ui::header(uint32_t now) {
   nebula_.draw(fb_, now / 1000.0f);
   const Agent* v = view();
-  float target = !net.setup && count() > 1 && v ? 1.0f : 0.0f;
-  float dt = headerAt_ ? min((now - headerAt_) / 1000.0f, 0.1f) : 1.0f;
-  headerAt_ = now;
-  headerK_ += (target - headerK_) * min(1.0f, dt * 9.0f);
-  if (fabsf(target - headerK_) < 0.01f) headerK_ = target;
-  float e = headerK_ * headerK_ * (3 - 2 * headerK_);  // smoothstep
+  headerK_ = !net.setup && count() > 1 && v ? 1.0f : 0.0f;
+  float e = headerK_;
   float size = 1.0f - 0.3f * e;
   fb_.setFont(&fonts::FreeSansBold9pt7b);
   fb_.setTextSize(size);
