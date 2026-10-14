@@ -75,5 +75,7 @@ slows the session down.
 
 - Titles and messages are read from across a desk: short, plain, no markdown, under ~60 characters
   for titles and ~90 for messages. Use the current folder name as the project.
+- Write for a person glancing over: plain words only. No code, format strings ("+m:ss"),
+  placeholders, file paths or symbols; they look like rendering bugs on the screen.
 - Escape quotes properly inside the JSON. Don't put secrets (keys, passwords) on the screen.
 - Don't spam. A handful of updates per task is plenty.

@@ -327,7 +327,7 @@ A NebulaDeck touch screen on my desk shows what you are doing, so I can look awa
 - Whenever you ask me a question with clear options (a decision, an approval, yes/no; during a task or not), also put it on the screen: POST {"id":"<short id>","prompt":"<question>","options":["<A>","<B>"],"timeout":120} to http://${h}/api/ask, then poll curl -4 -s -m 3 "http://${h}/api/answer?id=<short id>" every second until it is not "pending". "answered:<option>" is my choice; "cancelled" or no reply means ask me in the chat instead. At most 4 short options. Ask on the screen first and only fall back to the chat. Open-ended questions stay in the chat only.
 - When finished, always (even on failure): POST {"summary":"<one sentence>"} to http://${h}/api/done
 
-Titles under 60 characters, messages under 90, plain text, no secrets. A handful of updates per task, not every step.`;
+Titles under 60 characters, messages under 90, in plain words a person can read at a glance: no code, file paths, placeholders or symbols, and no secrets. A handful of updates per task, not every step.`;
 
   const hostInput = $('host');
   const tpls = [...document.querySelectorAll('[data-tpl]')].map((el) => [el, el.textContent]);
