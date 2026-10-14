@@ -30,8 +30,10 @@ def curl(url, method="GET", data=None, headers=()):
     if data is not None:
         cmd += ["--data-binary", data]
     r = subprocess.run(cmd, capture_output=True)  # bytes: text mode would turn \r\n into \n
-    # Refused / empty reply: the device never got the request. Reset: harmless to repeat a GET.
-    if r.returncode in (7, 52) or (r.returncode == 56 and method == "GET"):
+    # Refused / empty reply: the device never got the request. Reset or timed out (WiFi stalls):
+    # harmless to repeat a GET or a request that only sets state; not a msg or ask (duplicates).
+    repeatable = method == "GET" or not any(url.endswith(t) for t in ("/msg", "/ask"))
+    if r.returncode in (7, 52) or (r.returncode in (28, 56) and repeatable):
         r = subprocess.run(cmd, capture_output=True)
     if r.returncode:  # 6 = name lookup failed, 7 = refused, 28 = timed out
         raise OSError("curl exit %d for %s %s" % (r.returncode, method, url))
