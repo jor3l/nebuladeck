@@ -15,10 +15,10 @@
   body {
     margin: 0; min-height: 100vh; color: var(--text); background: var(--bg);
     font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    background-image:
-      radial-gradient(60% 40% at 20% 0%, rgba(112, 30, 140, .45), transparent 70%),
-      radial-gradient(50% 40% at 90% 30%, rgba(60, 200, 255, .18), transparent 70%);
   }
+  /* The device's nebula, rendered behind the page (see nebula script below). */
+  #nebula { position: fixed; inset: 0; width: 100%; height: 100%; z-index: -1; display: block; }
+  main { position: relative; }
   main { max-width: 640px; margin: 0 auto; padding: 48px 16px 64px; }
   .eyebrow { letter-spacing: .3em; font-size: 12px; font-weight: 700; color: var(--dim); }
   h1 { font-size: 34px; line-height: 1.1; margin: 8px 0 12px; }
@@ -66,6 +66,7 @@
   .bars { display: inline-flex; align-items: flex-end; gap: 2px; height: 14px; }
   .bars i { width: 3px; background: var(--line); border-radius: 1px; }
   .bars i.on { background: var(--accent); }
+  .nets #joinForm { padding: 4px 14px 2px; background: var(--card2); border-bottom: 1px solid var(--line); }
   label { display: block; font-size: 14px; color: var(--dim); margin: 10px 0 6px; }
   input[type=text], input[type=password] {
     width: 100%; font: inherit; color: var(--text); background: #0b0e22; border: 1px solid var(--line);
@@ -83,6 +84,7 @@
 </style>
 </head>
 <body>
+<canvas id="nebula" aria-hidden="true"></canvas>
 <main>
   <div class="eyebrow">N E B U L A D E C K</div>
   <h1>Set up your screen</h1>
@@ -357,8 +359,13 @@ Keep titles under 60 characters, plain text, no secrets.</pre></div>
     return el;
   }
 
+  // The join form opens right under the tapped network (with many networks, a form below the
+  // list would open off-screen). Re-rendering parks it back in the card first.
+  const joinForm = $('joinForm'), formHome = $('netCard');
   function renderNets(list) {
     const ul = $('nets');
+    formHome.append(joinForm);
+    joinForm.hidden = true;
     ul.replaceChildren();
     if (!list.length) {
       const li = document.createElement('li');
@@ -385,18 +392,21 @@ Keep titles under 60 characters, plain text, no secrets.</pre></div>
   function choose(ssid, secure, btn) {
     chosen = ssid;
     document.querySelectorAll('.nets button').forEach((x) => x.setAttribute('aria-selected', x === btn));
-    $('joinForm').hidden = false;
+    if (btn) btn.closest('li').append(joinForm);
+    else formHome.append(joinForm);
+    joinForm.hidden = false;
     $('ssidRow').hidden = ssid !== null;
     $('passRow').hidden = !secure;
     $('ssidLabel').textContent = ssid ?? 'the network';
     $('pass').value = '';
     $('joinBtn').disabled = false;
-    (ssid === null ? $('ssid') : secure ? $('pass') : $('joinBtn')).focus();
+    (ssid === null ? $('ssid') : secure ? $('pass') : $('joinBtn')).focus({ preventScroll: true });
+    joinForm.scrollIntoView({ block: 'center' });
   }
 
   $('rescan').onclick = () => send({ cmd: 'scan' });
   $('other').onclick = () => choose(null, true, null);
-  $('joinForm').onsubmit = async (e) => {
+  joinForm.onsubmit = async (e) => {
     e.preventDefault();
     const ssid = chosen ?? $('ssid').value.trim();
     if (!ssid) return;
@@ -409,6 +419,149 @@ Keep titles under 60 characters, plain text, no secrets.</pre></div>
       $('joinBtn').disabled = false;
     }
   };
+</script>
+<script>
+// Port of firmware/src/nebula.cpp: two tileable layers baked once, scrolled against each
+// other every frame, plus touch ripples and twinkling stars. Rendered at 1/3 resolution.
+(() => {
+  const W = 320, H = 480, LW = W / 2, LH = H / 2, SCALE = 3, RING_W = 14, GLOW_R = 44, LIFE = 1.6;
+  const canvas = document.getElementById('nebula');
+  const ctx = canvas.getContext('2d');
+
+  const hashp = (x, y, seed) => {
+    let h = (Math.imul(x, 374761393) + Math.imul(y, 668265263) + Math.imul(seed, 2246822519 | 0)) >>> 0;
+    h = Math.imul(h ^ (h >>> 13), 1274126177) >>> 0;
+    return ((h ^ (h >>> 16)) & 0xffff) / 65535;
+  };
+  const mod = (a, m) => ((a % m) + m) % m;
+  function pnoise(x, y, px, py, seed) {
+    const xi = Math.floor(x), yi = Math.floor(y);
+    let fx = x - xi, fy = y - yi;
+    fx = fx * fx * (3 - 2 * fx); fy = fy * fy * (3 - 2 * fy);
+    const x0 = mod(xi, px), y0 = mod(yi, py), x1 = (x0 + 1) % px, y1 = (y0 + 1) % py;
+    const a = hashp(x0, y0, seed), b = hashp(x1, y0, seed), c = hashp(x0, y1, seed), d = hashp(x1, y1, seed);
+    return a + (b - a) * fx + (c - a) * fy + (a - b - c + d) * fx * fy;
+  }
+  function pfbm(x, y, px, py, oct, seed) {
+    let sum = 0, amp = 0.5, norm = 0;
+    for (let o = 0; o < oct; o++) {
+      sum += amp * pnoise(x, y, px, py, seed + o);
+      norm += amp; x *= 2; y *= 2; px *= 2; py *= 2; amp *= 0.5;
+    }
+    return sum / norm;
+  }
+  // Domain-warped fbm at half resolution, contrast-stretched, upsampled to W x H.
+  function bake(px, py, warp, seed) {
+    const lo = new Uint8Array(LW * LH), hist = new Uint32Array(256);
+    for (let y = 0; y < LH; y++)
+      for (let x = 0; x < LW; x++) {
+        const u = x * px / LW, v = y * py / LH;
+        const q = pfbm(u, v, px, py, 2, seed + 100), r = pfbm(u + 1.3, v + 2.7, px, py, 2, seed + 200);
+        const i = Math.max(0, Math.min(255, Math.floor(pfbm(u + warp * q, v + warp * r, px, py, 4, seed) * 255)));
+        lo[y * LW + x] = i; hist[i]++;
+      }
+    let n = 0, a = 0, b = 255;
+    for (let i = 0; i < 256; i++) {
+      n += hist[i];
+      if (n < LW * LH / 100) a = i;
+      if (n < LW * LH * 99 / 100) b = i;
+    }
+    const map = new Uint8Array(256).map((_, i) => Math.max(0, Math.min(255, Math.trunc((i - a) * 255 / (b - a + 1)))));
+    const out = new Uint8Array(W * H);
+    for (let y = 0; y < H; y++)
+      for (let x = 0; x < W; x++) {
+        const x0 = x >> 1, y0 = y >> 1, x1 = (x0 + (x & 1)) % LW, y1 = (y0 + (y & 1)) % LH;
+        out[y * W + x] = map[(lo[y0 * LW + x0] + lo[y0 * LW + x1] + lo[y1 * LW + x0] + lo[y1 * LW + x1]) >> 2];
+      }
+    return out;
+  }
+  const A = bake(3, 4, 1.6, 1), B = bake(5, 7, 1.2, 7);
+
+  // Deep space -> violet -> magenta -> cyan, mid-tones stretched (same stops as the device).
+  const stops = [[0, 2, 3, 14], [0.3, 10, 8, 40], [0.5, 38, 14, 86], [0.7, 112, 30, 140], [0.86, 226, 64, 160], [1, 120, 220, 255]];
+  const lut = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    const v = Math.max(0, Math.min(1, (i / 255 - 0.26) / (0.88 - 0.26)));
+    let k = 0;
+    while (k < 4 && v > stops[k + 1][0]) k++;
+    const f = (v - stops[k][0]) / (stops[k + 1][0] - stops[k][0]);
+    const c = (j) => Math.round(stops[k][j] + (stops[k + 1][j] - stops[k][j]) * f);
+    lut[i] = (255 << 24) | (c(3) << 16) | (c(2) << 8) | c(1); // ABGR (little endian)
+  }
+
+  let cw = 0, ch = 0, img, px, val, stars = [];
+  function resize() {
+    cw = Math.ceil(innerWidth / SCALE); ch = Math.ceil(innerHeight / SCALE);
+    canvas.width = cw; canvas.height = ch;
+    img = ctx.createImageData(cw, ch);
+    px = new Uint32Array(img.data.buffer);
+    val = new Int16Array(cw * ch);
+    stars = Array.from({ length: Math.round(cw * ch / 1100) }, (_, i) => [
+      Math.floor(hashp(i, 91, 0) * cw), Math.floor(hashp(i, 37, 0) * ch), 0.6 + hashp(i, 5, 0) * 1.6, i]);
+  }
+
+  const ripples = [];
+  function ripple(e) {
+    ripples.push({ x: e.clientX / SCALE, y: e.clientY / SCALE, t0: performance.now() / 1000 });
+    if (ripples.length > 5) ripples.shift();
+  }
+  let last = { x: -1e3, y: -1e3, t: 0 };
+  addEventListener('pointerdown', (e) => { ripple(e); last = { x: e.clientX, y: e.clientY, t: performance.now() }; });
+  addEventListener('pointermove', (e) => { // a trail while dragging
+    if (!e.buttons) return;
+    const dx = e.clientX - last.x, dy = e.clientY - last.y, now = performance.now();
+    if (dx * dx + dy * dy > 54 * 54 && now - last.t > 90) { ripple(e); last = { x: e.clientX, y: e.clientY, t: now }; }
+  });
+
+  function draw(ms) {
+    const t = ms / 1000;
+    const ax = mod(Math.trunc(t * 6), W), ay = mod(Math.trunc(t * 3), H);
+    const bx = mod(Math.trunc(-t * 10), W), by = mod(Math.trunc(t * 5), H);
+    const breathe = Math.trunc(10 * Math.sin(t * 0.25));
+    for (let y = 0, i = 0; y < ch; y++) {
+      const ra = ((y + ay) % H) * W, rb = ((y + by) % H) * W;
+      let xa = ax, xb = bx;
+      for (let x = 0; x < cw; x++, i++) {
+        val[i] = ((A[ra + xa] * 5 + B[rb + xb] * 3) >> 3) + breathe;
+        if (++xa === W) xa = 0;
+        if (++xb === W) xb = 0;
+      }
+    }
+    for (let k = ripples.length - 1; k >= 0; k--) {
+      const r = ripples[k], age = t - r.t0;
+      if (age > LIFE || age < 0) { ripples.splice(k, 1); continue; }
+      const fade = (1 - age / LIFE) ** 2, rad = age * 150, ring = fade * 150, glow = fade * 130;
+      const R = rad + RING_W, x0 = Math.max(0, Math.floor(r.x - R)), x1 = Math.min(cw - 1, Math.ceil(r.x + R));
+      const y0 = Math.max(0, Math.floor(r.y - R)), y1 = Math.min(ch - 1, Math.ceil(r.y + R));
+      for (let y = y0; y <= y1; y++) {
+        const dy2 = (y - r.y) ** 2;
+        for (let x = x0; x <= x1; x++) {
+          const d2 = (x - r.x) ** 2 + dy2, u = (Math.sqrt(d2) - rad) / RING_W;
+          let b = 0;
+          if (u > -1 && u < 1) b += ring * (1 - u * u) ** 2;
+          if (d2 < GLOW_R * GLOW_R) b += glow * (1 - d2 / (GLOW_R * GLOW_R)) ** 2;
+          if (b) val[y * cw + x] += b;
+        }
+      }
+    }
+    for (let i = 0; i < val.length; i++) { const v = val[i]; px[i] = lut[v < 0 ? 0 : v > 255 ? 255 : v]; }
+    for (const [sx, sy, speed, i] of stars) {
+      const b = 70 + Math.trunc((0.5 + 0.5 * Math.sin(t * speed + i)) * 150);
+      px[sy * cw + sx] = (255 << 24) | (Math.min(255, b + 20) << 16) | (b << 8) | b;
+    }
+    ctx.putImageData(img, 0, 0);
+  }
+
+  resize();
+  addEventListener('resize', resize);
+  const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (still) { draw(0); addEventListener('resize', () => draw(0)); return; }
+  let prev = 0;
+  requestAnimationFrame(function frame(ms) {
+    if (ms - prev >= 33) { prev = ms; draw(ms); } // ~30 fps, like the device
+    requestAnimationFrame(frame);
+  });
+})();
 </script>
 </body>
 </html>
