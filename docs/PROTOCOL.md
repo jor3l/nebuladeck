@@ -15,6 +15,7 @@ one JSON object per line (`\n`). Host and device both ignore unknown fields.
 | `ask` | `id`, `prompt`, `options[]` | Show buttons; device answers with `tap` |
 | `ui` | `layout` | Replace the UI layout (declarative widget tree) |
 | `clear` | | Clear messages |
+| `ask_cancel` | | Remove an open `ask` (host gave up waiting) |
 | `bye` | | Clean disconnect: back to the nebula immediately (no 3 s wait) |
 
 ## Device → host

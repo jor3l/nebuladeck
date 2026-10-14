@@ -173,7 +173,8 @@ void Ui::drawDone(uint32_t now) {
   fb_.drawString("Agent idle", W / 2 - 36, 317);
   fb_.setTextDatum(top_left);
 
-  // Floating token card.
+  // Floating token card (only when the agent reported totals).
+  if (tokIn == 0 && tokOut == 0) return;
   int x = 16, y = 358, w = W - 32, h = 98;
   fb_.fillRoundRect(x + 2, y + 6, w - 4, h, 18, fb_.color565(1, 2, 8));  // shadow
   fb_.fillRoundRect(x, y, w, h, 18, fb_.color565(14, 17, 40));

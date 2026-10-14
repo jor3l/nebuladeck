@@ -22,15 +22,15 @@ When no agent is connected the device shows a slow nebula animation and
 
 ```
 Agent (Claude Code + skill)
-   │  MCP (stdio)
+   │  shell: nebuladeck state/msg/ask/done
    ▼
-host/  MCP server (Node/TS)  ──USB CDC serial, newline-delimited JSON──▶  firmware/ (ESP32-S3, LVGL)
+host/  daemon + CLI (Node)  ──USB CDC serial, newline-delimited JSON──▶  firmware/ (ESP32-S3, LVGL)
    ▲                                                                       │ touch events
    └───────────────────────────────────────────────────────────────────────┘
 ```
 
-- `firmware/` PlatformIO + Arduino/ESP-IDF, LVGL, LovyanGFX display/touch drivers
-- `host/` MCP server: owns the serial port, reconnects, heartbeat, tool surface
+- `firmware/` PlatformIO + Arduino, LovyanGFX, custom renderer
+- `host/` daemon (owns the serial port, heartbeat, reconnect) + `nebuladeck` CLI
 - `skill/` the agent skill describing when/how to use the screen
 - `docs/PROTOCOL.md` wire protocol and MCP tools (source of truth)
 
@@ -41,7 +41,13 @@ host/  MCP server (Node/TS)  ──USB CDC serial, newline-delimited JSON──�
 | Idle | no host heartbeat for 3 s | nebula animation + "Agent not connected" |
 | Connected | host heartbeat | status UI (project, state, messages, actions) |
 
+## Quick start
+
+See [docs/SETUP-MAC.md](docs/SETUP-MAC.md). In short: `make flash`, `make install`, then
+`nebuladeck state working "Hello"`.
+
 ## Status
 
-Scaffolding. Next: firmware bring-up (display + touch + nebula), then protocol,
-then MCP server, then skill.
+Firmware (nebula, status UI, ask, completed screen with token card), protocol, daemon + CLI
+(`host/`) and a Claude Code skill (`skill/`) work. The firmware renders with LovyanGFX,
+not LVGL. Next: real-world testing; an MCP wrapper over the daemon is optional.

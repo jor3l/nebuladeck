@@ -1,0 +1,9 @@
+{
+  "name": "nebuladeck",
+  "version": "0.1.0",
+  "description": "CLI + daemon for the NebulaDeck agent screen (Panlee SC01 Plus)",
+  "type": "module",
+  "bin": { "nebuladeck": "bin/nebuladeck.js" },
+  "engines": { "node": ">=20" },
+  "dependencies": { "serialport": "^12.0.0" }
+}

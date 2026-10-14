@@ -67,6 +67,8 @@ void Proto::handle(const String& line, uint32_t now) {
     ui_.tokIn = doc["tokens_in"].as<uint32_t>();
     ui_.tokOut = doc["tokens_out"].as<uint32_t>();
     ui_.durationS = doc["duration"].is<int>() ? doc["duration"].as<int>() : -1;
+  } else if (!strcmp(t, "ask_cancel")) {
+    ui_.asking = false;
   } else if (!strcmp(t, "bye")) {
     ui_.reset();
     lastPing_ = 0;  // straight back to the nebula
