@@ -439,12 +439,27 @@ Titles under 60 characters, messages under 90, plain text, no secrets. A handful
   });
 
   // --- WiFi over Bluetooth ---
+  const log = (...a) => console.log('[nebuladeck]', ...a);
   let chNets, chCtl, chStat, joined = false, chosen = null;
   // Chrome allows one GATT operation at a time.
   let chain = Promise.resolve();
   const gatt = (fn) => { const p = chain.then(fn); chain = p.catch(() => {}); return p; };
-  const readJson = (ch) => gatt(() => ch.readValue()).then((v) => JSON.parse(dec.decode(v)));
-  const send = (o) => gatt(() => chCtl.writeValueWithResponse(enc.encode(JSON.stringify(o))));
+  // A readValue() also fires 'characteristicvaluechanged', the same event as a device
+  // notification. Without this flag, reacting to it by reading again loops forever and
+  // rebuilds the network list under the user's finger.
+  let ownRead = false;
+  const readJson = (ch, name) => gatt(async () => {
+    ownRead = true;
+    try { return await ch.readValue(); } finally { ownRead = false; }
+  }).then((v) => {
+    const text = dec.decode(v);
+    log(`read ${name}:`, text);
+    return JSON.parse(text);
+  });
+  const send = (o) => {
+    log('write control:', o.cmd === 'join' ? { ...o, pass: o.pass ? `(${o.pass.length} chars)` : '' } : o);
+    return gatt(() => chCtl.writeValueWithResponse(enc.encode(JSON.stringify(o))));
+  };
 
   function setStatus(text, kind) {
     $('statusText').textContent = text;
@@ -454,8 +469,11 @@ Titles under 60 characters, messages under 90, plain text, no secrets. A handful
   $('connectBtn').onclick = async () => {
     $('bleError').hidden = true;
     try {
+      log('requesting device');
       const dev = await navigator.bluetooth.requestDevice({ filters: [{ services: [SVC] }] });
+      log('picked', dev.name, dev.id);
       dev.addEventListener('gattserverdisconnected', () => {
+        log('disconnected', { joined });
         if (joined) return;
         $('netCard').hidden = true;
         $('bleConnect').hidden = false;
@@ -463,16 +481,24 @@ Titles under 60 characters, messages under 90, plain text, no secrets. A handful
         $('bleError').hidden = false;
       });
       const server = await dev.gatt.connect();
+      log('GATT connected');
       const svc = await server.getPrimaryService(SVC);
       chNets = await svc.getCharacteristic(NETS);
       chCtl = await svc.getCharacteristic(CTL);
       chStat = await svc.getCharacteristic(STAT);
       await chStat.startNotifications();
-      chStat.addEventListener('characteristicvaluechanged', onStatus); // a change signal: re-read the full value
+      log('notifications on');
+      // A change signal from the device (cut at the MTU): re-read the full value.
+      chStat.addEventListener('characteristicvaluechanged', () => {
+        if (ownRead) return;
+        log('status notification');
+        onStatus();
+      });
       $('bleConnect').hidden = true;
       $('netCard').hidden = false;
       onStatus();
     } catch (e) {
+      log('connect failed:', e.name, e.message);
       if (e.name === 'NotFoundError') return; // dialog closed
       $('bleError').textContent = e.message;
       $('bleError').hidden = false;
@@ -480,13 +506,14 @@ Titles under 60 characters, messages under 90, plain text, no secrets. A handful
   };
 
   async function onStatus() {
-    const s = await readJson(chStat);
+    let s;
+    try { s = await readJson(chStat, 'status'); } catch (e) { log('status read failed:', e.name, e.message); return; }
     switch (s.state) {
       case 'idle': case 'scanning':
         setStatus('Looking for networks…', 'busy'); break;
       case 'ready':
         setStatus(s.saved ? `Saved network: ${s.saved}. Pick one to change it.` : 'Pick your network', '');
-        renderNets(await readJson(chNets)); break;
+        renderNets(await readJson(chNets, 'networks')); break;
       case 'connecting':
         setStatus(`Connecting to ${s.ssid}…`, 'busy'); $('joinBtn').disabled = true; break;
       case 'failed':
@@ -520,7 +547,12 @@ Titles under 60 characters, messages under 90, plain text, no secrets. A handful
   // The join form opens right under the tapped network (with many networks, a form below the
   // list would open off-screen). Re-rendering parks it back in the card first.
   const joinForm = $('joinForm'), formHome = $('netCard');
+  let lastNets = '';
   function renderNets(list) {
+    const key = JSON.stringify(list);
+    if (key === lastNets) { log('networks unchanged, keeping the list'); return; }
+    lastNets = key;
+    log(`rendering ${list.length} networks`);
     const ul = $('nets');
     formHome.append(joinForm);
     joinForm.hidden = true;
@@ -548,6 +580,7 @@ Titles under 60 characters, messages under 90, plain text, no secrets. A handful
   }
 
   function choose(ssid, secure, btn) {
+    log('picked network', { ssid, secure, inList: !!btn });
     chosen = ssid;
     document.querySelectorAll('.nets button').forEach((x) => x.setAttribute('aria-selected', x === btn));
     if (btn) btn.closest('li').append(joinForm);
@@ -560,9 +593,10 @@ Titles under 60 characters, messages under 90, plain text, no secrets. A handful
     $('joinBtn').disabled = false;
     (ssid === null ? $('ssid') : secure ? $('pass') : $('joinBtn')).focus({ preventScroll: true });
     joinForm.scrollIntoView({ block: 'center' });
+    log('join form open', { hidden: joinForm.hidden, inDocument: joinForm.isConnected });
   }
 
-  $('rescan').onclick = () => send({ cmd: 'scan' });
+  $('rescan').onclick = () => { lastNets = ''; send({ cmd: 'scan' }); };
   $('other').onclick = () => choose(null, true, null);
   joinForm.onsubmit = async (e) => {
     e.preventDefault();
@@ -573,6 +607,7 @@ Titles under 60 characters, messages under 90, plain text, no secrets. A handful
     try {
       await send({ cmd: 'join', ssid, pass: $('passRow').hidden ? '' : $('pass').value });
     } catch (err) {
+      log('join write failed:', err.name, err.message);
       setStatus(err.message, 'err');
       $('joinBtn').disabled = false;
     }
