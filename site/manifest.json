@@ -1,6 +1,6 @@
 {
   "name": "NebulaDeck",
-  "version": "dev",
+  "version": "none",
   "new_install_prompt_erase": false,
   "builds": [
     {

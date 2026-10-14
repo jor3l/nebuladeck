@@ -1,0 +1,44 @@
+name: pages
+
+# Setup page on GitHub Pages: WiFi setup, web flasher with both channels, agent skill. The images are copied from the
+# releases because the browser flasher needs them same-origin.
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch latest and dev images
+        run: |
+          for ch in latest dev; do
+            if [ $ch = latest ]; then tag=$(gh release view --json tagName -q .tagName 2>/dev/null || true)
+            else tag=dev; fi
+            [ -n "$tag" ] || { echo "no $ch release yet"; continue; }
+            name=$(gh release view "$tag" --json name -q .name)
+            mkdir -p "site/$ch"
+            gh release download "$tag" -p nebuladeck-sc01plus.bin -D "site/$ch"
+            sed -e "s/\"version\": \"none\"/\"version\": \"$name\"/" \
+                -e "s#\"path\": \"nebuladeck-sc01plus.bin\"#\"path\": \"$ch/nebuladeck-sc01plus.bin\"#" \
+                site/manifest.json > "site/manifest-$ch.json"
+          done
+          rm site/manifest.json
+          cp -r skill site/skill   # SKILL.md + hooks.json, downloadable from the page
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deploy
+        uses: actions/deploy-pages@v4

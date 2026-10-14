@@ -1,0 +1,48 @@
+name: release
+
+# Promotes main to a stable release: builds it as vX.Y.Z on the stable channel and
+# marks it latest, so every stable device offers the update on its screen.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version without the v, e.g. 0.3.0'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the version
+        run: |
+          [[ "${{ inputs.version }}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "version must be X.Y.Z"; exit 1; }
+          echo "PLATFORMIO_BUILD_FLAGS=-DFW_VERSION='\"${{ inputs.version }}\"' -DFW_CHANNEL='\"stable\"'" >> "$GITHUB_ENV"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-${{ hashFiles('firmware/platformio.ini') }}
+      - run: pip install platformio esptool
+      - run: pio run -e sc01plus
+        working-directory: firmware
+      - run: ./scripts/merge-firmware.sh
+      - name: Publish v${{ inputs.version }} as latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v${{ inputs.version }}" dist/*.bin --target "$GITHUB_SHA" \
+            --latest --title "v${{ inputs.version }}" --generate-notes
+
+  pages:
+    needs: build
+    uses: ./.github/workflows/pages.yml
+    permissions:
+      contents: read
+      pages: write
+      id-token: write

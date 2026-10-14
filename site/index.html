@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>NebulaDeck Flasher</title>
-<meta name="description" content="Flash NebulaDeck onto a Panlee SC01 Plus from your browser.">
+<title>NebulaDeck Setup</title>
+<meta name="description" content="Connect your NebulaDeck to WiFi over Bluetooth, or flash its firmware from the browser.">
 <script type="module" src="https://unpkg.com/esp-web-tools@10.1.1/dist/web/install-button.js?module"></script>
 <style>
   :root {
-    --bg: #070914; --card: #10142b; --line: #262d5c; --text: #e6eaff; --dim: #8a93c9;
-    --accent: #3cc8ff; --accent2: #ff82c8;
+    --bg: #070914; --card: #10142b; --card2: #151a38; --line: #262d5c; --text: #e6eaff; --dim: #8a93c9;
+    --accent: #3cc8ff; --accent2: #ff82c8; --ok: #46dc8c; --err: #ff5a64; --warn: #ffcf8a;
   }
   * { box-sizing: border-box; }
   body {
@@ -19,75 +19,396 @@
       radial-gradient(60% 40% at 20% 0%, rgba(112, 30, 140, .45), transparent 70%),
       radial-gradient(50% 40% at 90% 30%, rgba(60, 200, 255, .18), transparent 70%);
   }
-  main { max-width: 640px; margin: 0 auto; padding: 56px 16px 64px; }
+  main { max-width: 640px; margin: 0 auto; padding: 48px 16px 64px; }
   .eyebrow { letter-spacing: .3em; font-size: 12px; font-weight: 700; color: var(--dim); }
-  h1 { font-size: 36px; line-height: 1.1; margin: 8px 0 12px; }
-  .lead { color: var(--dim); margin: 0 0 28px; }
+  h1 { font-size: 34px; line-height: 1.1; margin: 8px 0 12px; }
+  .lead { color: var(--dim); margin: 0 0 24px; }
+  .choices { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+  .choice {
+    font: inherit; color: var(--text); text-align: left; cursor: pointer;
+    background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px;
+  }
+  .choice strong { display: block; font-size: 17px; margin-bottom: 4px; }
+  .choice span { color: var(--dim); font-size: 14px; }
+  .choice[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 22px; margin-bottom: 16px; }
   .card h2 { font-size: 13px; letter-spacing: .12em; text-transform: uppercase; color: var(--dim); margin: 0 0 12px; }
   ol { margin: 0; padding-left: 20px; }
   li { margin-bottom: 8px; }
-  .row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
-  .version { color: var(--dim); font-size: 14px; }
-  button.flash {
-    font: inherit; font-weight: 700; color: #04101c; border: 0; cursor: pointer;
-    padding: 12px 22px; border-radius: 12px;
-    background: linear-gradient(135deg, var(--accent), var(--accent2));
+  .row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  button.primary, button.ghost {
+    font: inherit; font-weight: 700; border: 0; cursor: pointer; padding: 12px 22px; border-radius: 12px;
   }
-  .warn { display: none; border-color: #7a4a1e; color: #ffcf8a; }
-  code { background: #0b0e22; border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; font-size: 14px; }
+  button.primary { color: #04101c; background: linear-gradient(135deg, var(--accent), var(--accent2)); }
+  button.primary:disabled { opacity: .5; cursor: default; }
+  button.ghost { color: var(--text); background: var(--card2); border: 1px solid var(--line); font-weight: 600; padding: 10px 16px; }
+  .note { display: none; border-color: #7a4a1e; color: var(--warn); }
+  code { background: #0b0e22; border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; font-size: 14px; overflow-wrap: anywhere; }
+  pre { background: #0b0e22; border: 1px solid var(--line); border-radius: 10px; padding: 12px; overflow-x: auto; font-size: 14px; margin: 8px 0 0; }
   a { color: var(--accent); }
-  small, .foot { color: var(--dim); font-size: 14px; }
+  small, .foot, .dim { color: var(--dim); font-size: 14px; }
+  [hidden] { display: none !important; }
+  .status { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--dim); flex: none; }
+  .dot.busy { background: var(--accent); animation: pulse 1s infinite alternate; }
+  .dot.ok { background: var(--ok); }
+  .dot.err { background: var(--err); }
+  @keyframes pulse { to { opacity: .3; } }
+  .nets { list-style: none; padding: 0; margin: 0 0 12px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .nets li { margin: 0; }
+  .nets button {
+    width: 100%; display: flex; align-items: center; gap: 12px; font: inherit; color: var(--text); text-align: left;
+    background: transparent; border: 0; border-bottom: 1px solid var(--line); padding: 12px 14px; cursor: pointer;
+  }
+  .nets li:last-child button { border-bottom: 0; }
+  .nets button:hover, .nets button[aria-selected="true"] { background: var(--card2); }
+  .nets .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bars { display: inline-flex; align-items: flex-end; gap: 2px; height: 14px; }
+  .bars i { width: 3px; background: var(--line); border-radius: 1px; }
+  .bars i.on { background: var(--accent); }
+  label { display: block; font-size: 14px; color: var(--dim); margin: 10px 0 6px; }
+  input[type=text], input[type=password] {
+    width: 100%; font: inherit; color: var(--text); background: #0b0e22; border: 1px solid var(--line);
+    border-radius: 10px; padding: 10px 12px;
+  }
+  .channels { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+  .channels label { margin: 0; display: flex; align-items: center; gap: 8px; color: var(--text); font-size: 15px;
+    background: var(--card2); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; cursor: pointer; }
+  .copy { position: relative; }
+  .copy button { position: absolute; top: 6px; right: 6px; font: inherit; font-size: 12px; color: var(--text);
+    background: var(--card2); border: 1px solid var(--line); border-radius: 8px; padding: 4px 8px; cursor: pointer; }
+  .copy pre { padding-right: 64px; }
+  pre.wrap { white-space: pre-wrap; overflow-wrap: anywhere; }
+  @media (max-width: 600px) { .choices { grid-template-columns: 1fr; } h1 { font-size: 28px; } }
 </style>
 </head>
 <body>
 <main>
   <div class="eyebrow">N E B U L A D E C K</div>
-  <h1>Flash your screen</h1>
-  <p class="lead">An always-on touch display for AI agents on the Panlee SC01 Plus. This page installs the latest firmware straight from your browser.</p>
+  <h1>Set up your screen</h1>
+  <p class="lead">An always-on touch display for AI agents on the Panlee SC01 Plus. It lives on your WiFi; your agents talk to it over the local network.</p>
 
-  <div class="card warn" id="nosupport">
-    This browser can't talk to USB serial devices. Use <strong>Chrome</strong> or <strong>Edge</strong> on a desktop.
+  <div class="choices" role="group" aria-label="What do you want to do?">
+    <button class="choice" id="pickWifi" aria-pressed="false">
+      <strong>Connect to WiFi</strong>
+      <span>The screen shows a QR code? Start here. Uses Bluetooth.</span>
+    </button>
+    <button class="choice" id="pickFlash" aria-pressed="false">
+      <strong>Flash device</strong>
+      <span>Install or reinstall the firmware over USB.</span>
+    </button>
+    <button class="choice" id="pickAgent" aria-pressed="false">
+      <strong>Set up your agent</strong>
+      <span>Teach Claude Code (or any agent) to use the screen.</span>
+    </button>
   </div>
 
-  <div class="card">
-    <h2>1 · Put the board in download mode</h2>
-    <ol>
-      <li>Unplug the board, then connect it with a USB-C <em>data</em> cable.</li>
-      <li>On the <strong>DEBUG</strong> header, jumper <code>BOOT</code> to <code>GND</code>.</li>
-      <li>Press <strong>RST</strong>. The screen may stay dark.</li>
-    </ol>
-    <p><small>If the board is already running NebulaDeck, the install may work without this. Try it first; if it can't connect, do the steps above.</small></p>
-  </div>
+  <!-- WiFi over Bluetooth -->
+  <section id="wifi" hidden>
+    <div class="card note" id="noBle">
+      This browser can't use Bluetooth from a web page. Use <strong>Chrome</strong> or <strong>Edge</strong> on Android, macOS, Windows or Linux.
+      On iPhone or iPad, open this page in the <strong>Bluefy</strong> browser.
+    </div>
 
-  <div class="card">
-    <h2>2 · Install</h2>
-    <div class="row">
-      <esp-web-install-button manifest="manifest.json">
-        <button slot="activate" class="flash">Connect &amp; install</button>
+    <div class="card" id="bleConnect">
+      <h2>1 · Find your NebulaDeck</h2>
+      <p>Keep the screen showing its QR code, then pick <strong id="expectName">NebulaDeck</strong> in the Bluetooth dialog.</p>
+      <button class="primary" id="connectBtn">Connect over Bluetooth</button>
+      <p id="bleError" class="dim" hidden></p>
+    </div>
+
+    <div class="card" id="netCard" hidden>
+      <h2>2 · Choose your network</h2>
+      <div class="status"><span class="dot busy" id="statusDot"></span><span id="statusText">Connected to the screen</span></div>
+      <ul class="nets" id="nets"></ul>
+      <div class="row">
+        <button class="ghost" id="rescan">Scan again</button>
+        <button class="ghost" id="other">Other network…</button>
+      </div>
+      <form id="joinForm" hidden>
+        <div id="ssidRow" hidden>
+          <label for="ssid">Network name</label>
+          <input type="text" id="ssid" maxlength="32" autocomplete="off">
+        </div>
+        <div id="passRow">
+          <label for="pass">Password for <strong id="ssidLabel"></strong></label>
+          <input type="password" id="pass" maxlength="64" autocomplete="current-password">
+        </div>
+        <p><button class="primary" type="submit" id="joinBtn">Connect</button></p>
+        <p><small>The password goes straight to the screen over Bluetooth and is stored only on the device.</small></p>
+      </form>
+    </div>
+
+    <div class="card" id="doneCard" hidden>
+      <h2>3 · You're online</h2>
+      <p>Your NebulaDeck is on <strong id="doneSsid"></strong> at <code id="doneHost">nebuladeck.local</code> (<code id="doneIp"></code>). In a few seconds it switches to “Agent not connected”.</p>
+      <p>Check it from your computer with <code>curl http://nebuladeck.local/api/info</code>, then
+        <a href="#" id="toAgent">set up your agent</a>.</p>
+      <p><small>If <code>nebuladeck.local</code> doesn't resolve on your computer, use the IP instead: <code id="useCmd">export NEBULADECK_HOST=IP</code>. To change network later, hold the screen for 5 seconds.</small></p>
+    </div>
+  </section>
+
+  <!-- USB flashing -->
+  <section id="flash" hidden>
+    <div class="card note" id="noSerial">
+      This browser can't talk to USB serial devices. Use <strong>Chrome</strong> or <strong>Edge</strong> on a desktop.
+    </div>
+
+    <div class="card">
+      <h2>1 · Put the board in download mode</h2>
+      <ol>
+        <li>Unplug the board, then connect it with a USB-C <em>data</em> cable.</li>
+        <li>On the <strong>DEBUG</strong> header, jumper <code>BOOT</code> to <code>GND</code>.</li>
+        <li>Press <strong>RST</strong>. The screen may stay dark.</li>
+      </ol>
+      <p><small>If the board is already running NebulaDeck, the install may work without this. Try it first; if it can't connect, do the steps above.</small></p>
+    </div>
+
+    <div class="card">
+      <h2>2 · Install</h2>
+      <div class="channels" role="radiogroup" aria-label="Firmware channel">
+        <label><input type="radio" name="channel" value="latest" checked> Latest <span class="dim" id="verLatest"></span></label>
+        <label><input type="radio" name="channel" value="dev"> Dev <span class="dim" id="verDev"></span></label>
+      </div>
+      <p class="dim" id="channelNote">The stable release. Updates arrive over WiFi when a new version is released.</p>
+      <esp-web-install-button id="installer" manifest="manifest-latest.json">
+        <button slot="activate" class="primary">Connect &amp; install</button>
         <span slot="unsupported"></span>
         <span slot="not-allowed"></span>
       </esp-web-install-button>
-      <span class="version" id="version"></span>
+      <p><small>Pick the <code>usbmodem</code> / <code>Espressif</code> port in the browser dialog. Installing replaces whatever is on the board.</small></p>
     </div>
-    <p><small>Pick the <code>usbmodem</code> / <code>Espressif</code> port in the browser dialog. Installing replaces whatever is on the board.</small></p>
-  </div>
 
-  <div class="card">
-    <h2>3 · Finish</h2>
-    <ol>
-      <li>Remove the <code>BOOT</code> jumper and press <strong>RST</strong>. You should see the nebula and “Agent not connected”.</li>
-      <li>Install the CLI so agents can use it: <code>npm i -g nebuladeck</code>, then <code>nebuladeck state working "Hello"</code>.</li>
-    </ol>
-  </div>
+    <div class="card">
+      <h2>3 · Finish</h2>
+      <ol>
+        <li>Remove the <code>BOOT</code> jumper and press <strong>RST</strong>. The screen shows a welcome QR code.</li>
+        <li>Connect it to WiFi: <a href="#" id="toWifi">continue with Connect to WiFi</a>.</li>
+      </ol>
+    </div>
+  </section>
 
-  <p class="foot"><a href="https://github.com/jor3l/nebuladeck">Source &amp; docs on GitHub</a> · MIT licensed</p>
+  <!-- Agent setup -->
+  <section id="agent" hidden>
+    <div class="card">
+      <h2>Claude Code · the skill</h2>
+      <p>The skill tells Claude when to update the screen and how to ask you questions on it. It only uses <code>curl</code>, so there is nothing else to install. Run this in a terminal:</p>
+      <div class="copy"><button data-copy="installSkill">Copy</button><pre id="installSkill"></pre></div>
+      <p><small>Or download <a href="skill/SKILL.md" download>SKILL.md</a> into <code>~/.claude/skills/nebuladeck/</code>. Start a new Claude Code session afterwards.</small></p>
+    </div>
+
+    <div class="card">
+      <h2>Claude Code · live status while chatting (optional)</h2>
+      <p>Hooks make the screen show “Claude connected” with “Thinking…”, “Running a command…”, “Needs you” and “Ready” in every session, even without a task. Each hook is a background <code>curl</code> that sends only the event name, never your prompts or files.</p>
+      <p>Easiest: with the skill installed, ask Claude:</p>
+      <div class="copy"><button data-copy="hooksPrompt">Copy</button><pre class="wrap" id="hooksPrompt">Install the NebulaDeck hooks from the nebuladeck skill's hooks.json into my ~/.claude/settings.json.</pre></div>
+      <p><small>Or merge <a href="skill/hooks.json" download>hooks.json</a> into <code>~/.claude/settings.json</code> yourself.</small></p>
+    </div>
+
+    <div class="card">
+      <h2>Other agents</h2>
+      <p>Anything that can run <code>curl</code> can drive the screen. Paste this into your agent's instructions (AGENTS.md, rules, system prompt):</p>
+      <div class="copy"><button data-copy="agentsSnippet">Copy</button><pre class="wrap" id="agentsSnippet">A NebulaDeck status screen is on my local network at http://nebuladeck.local/api (JSON over HTTP, use curl -m 3, ignore failures).
+- Starting a multi-step task: POST /api/state {"status":"working","title":"...","project":"..."}
+- Milestones: POST /api/msg {"text":"...","level":"info|warn|error"}
+- Need a decision: POST /api/ask {"id":"q1","prompt":"...","options":["Yes","No"],"timeout":120}, then poll GET /api/answer?id=q1 every second until it is not "pending" ("answered:&lt;option&gt;" or "cancelled"; then ask in chat)
+- Finished (always, even on failure): POST /api/done {"summary":"..."}
+Keep titles under 60 characters, plain text, no secrets.</pre></div>
+      <p><small>Full API: <a href="https://github.com/jor3l/nebuladeck/blob/main/docs/PROTOCOL.md">docs/PROTOCOL.md</a>.</small></p>
+    </div>
+  </section>
+
+  <p class="foot"><a href="https://github.com/jor3l/nebuladeck">Source &amp; docs on GitHub</a> · MIT licensed · Runs on your local network only</p>
 </main>
 <script>
-  if (!('serial' in navigator)) document.getElementById('nosupport').style.display = 'block';
-  fetch('manifest.json').then(r => r.json()).then(m => {
-    document.getElementById('version').textContent = 'Latest: ' + m.version;
-  }).catch(() => {});
+  // GATT service of the device's setup mode; see docs/PROTOCOL.md.
+  const SVC = '6e656275-6c61-6465-636b-000000000001';
+  const NETS = '6e656275-6c61-6465-636b-000000000002';
+  const CTL = '6e656275-6c61-6465-636b-000000000003';
+  const STAT = '6e656275-6c61-6465-636b-000000000004';
+  const $ = (id) => document.getElementById(id);
+  const enc = new TextEncoder(), dec = new TextDecoder();
+
+  // Choice between the two flows; ?setup=XXXX (the screen's QR) opens WiFi.
+  const params = new URLSearchParams(location.search);
+  function pick(which) {
+    for (const k of ['wifi', 'flash', 'agent']) {
+      $(k).hidden = which !== k;
+      $('pick' + k[0].toUpperCase() + k.slice(1)).setAttribute('aria-pressed', which === k);
+    }
+  }
+  $('pickWifi').onclick = () => pick('wifi');
+  $('pickFlash').onclick = () => pick('flash');
+  $('pickAgent').onclick = () => pick('agent');
+  $('toAgent').onclick = (e) => { e.preventDefault(); pick('agent'); scrollTo(0, 0); };
+  if (location.hash === '#agent') pick('agent');
+
+  // Agent setup: the skill is served next to this page.
+  const base = new URL('skill/', location.href).href;
+  $('installSkill').textContent =
+    `mkdir -p ~/.claude/skills/nebuladeck && cd ~/.claude/skills/nebuladeck && \\\n  curl -fsSLO ${base}SKILL.md && curl -fsSLO ${base}hooks.json`;
+  document.querySelectorAll('[data-copy]').forEach((b) => b.onclick = async () => {
+    try { await navigator.clipboard.writeText($(b.dataset.copy).textContent); b.textContent = 'Copied'; }
+    catch { b.textContent = 'Select & copy'; }
+    setTimeout(() => (b.textContent = 'Copy'), 1500);
+  });
+  $('toWifi').onclick = (e) => { e.preventDefault(); pick('wifi'); scrollTo(0, 0); };
+  if (params.has('setup')) {
+    pick('wifi');
+    const id = params.get('setup').replace(/[^0-9A-Fa-f]/g, '').slice(0, 4).toUpperCase();
+    if (id) $('expectName').textContent = 'NebulaDeck-' + id;
+  }
+  if (!navigator.bluetooth) { $('noBle').style.display = 'block'; $('connectBtn').disabled = true; }
+  if (!('serial' in navigator)) $('noSerial').style.display = 'block';
+
+  // --- Flash: channel picker ---
+  const NOTES = {
+    latest: 'The stable release. Updates arrive over WiFi when a new version is released.',
+    dev: 'The newest build of main. May be broken; it updates to newer dev builds over WiFi.',
+  };
+  for (const ch of ['latest', 'dev']) {
+    fetch(`manifest-${ch}.json`).then((r) => r.json()).then((m) => {
+      $(ch === 'latest' ? 'verLatest' : 'verDev').textContent = m.version;
+    }).catch(() => {
+      $(ch === 'latest' ? 'verLatest' : 'verDev').textContent = '(none yet)';
+    });
+  }
+  document.querySelectorAll('input[name=channel]').forEach((r) => r.onchange = () => {
+    $('installer').setAttribute('manifest', `manifest-${r.value}.json`);
+    $('channelNote').textContent = NOTES[r.value];
+  });
+
+  // --- WiFi over Bluetooth ---
+  let chNets, chCtl, chStat, joined = false, chosen = null;
+  // Chrome allows one GATT operation at a time.
+  let chain = Promise.resolve();
+  const gatt = (fn) => { const p = chain.then(fn); chain = p.catch(() => {}); return p; };
+  const readJson = (ch) => gatt(() => ch.readValue()).then((v) => JSON.parse(dec.decode(v)));
+  const send = (o) => gatt(() => chCtl.writeValueWithResponse(enc.encode(JSON.stringify(o))));
+
+  function setStatus(text, kind) {
+    $('statusText').textContent = text;
+    $('statusDot').className = 'dot ' + (kind || '');
+  }
+
+  $('connectBtn').onclick = async () => {
+    $('bleError').hidden = true;
+    try {
+      const dev = await navigator.bluetooth.requestDevice({ filters: [{ services: [SVC] }] });
+      dev.addEventListener('gattserverdisconnected', () => {
+        if (joined) return;
+        $('netCard').hidden = true;
+        $('bleConnect').hidden = false;
+        $('bleError').textContent = 'The screen disconnected. Connect again.';
+        $('bleError').hidden = false;
+      });
+      const server = await dev.gatt.connect();
+      const svc = await server.getPrimaryService(SVC);
+      chNets = await svc.getCharacteristic(NETS);
+      chCtl = await svc.getCharacteristic(CTL);
+      chStat = await svc.getCharacteristic(STAT);
+      await chStat.startNotifications();
+      chStat.addEventListener('characteristicvaluechanged', onStatus); // a change signal: re-read the full value
+      $('bleConnect').hidden = true;
+      $('netCard').hidden = false;
+      onStatus();
+    } catch (e) {
+      if (e.name === 'NotFoundError') return; // dialog closed
+      $('bleError').textContent = e.message;
+      $('bleError').hidden = false;
+    }
+  };
+
+  async function onStatus() {
+    const s = await readJson(chStat);
+    switch (s.state) {
+      case 'idle': case 'scanning':
+        setStatus('Looking for networks…', 'busy'); break;
+      case 'ready':
+        setStatus(s.saved ? `Saved network: ${s.saved}. Pick one to change it.` : 'Pick your network', '');
+        renderNets(await readJson(chNets)); break;
+      case 'connecting':
+        setStatus(`Connecting to ${s.ssid}…`, 'busy'); $('joinBtn').disabled = true; break;
+      case 'failed':
+        setStatus(`Could not connect: ${s.error}`, 'err'); $('joinBtn').disabled = false; break;
+      case 'connected':
+        joined = true;
+        $('netCard').hidden = true;
+        $('doneCard').hidden = false;
+        $('doneSsid').textContent = chosen ?? s.saved ?? '';
+        $('doneHost').textContent = s.host;
+        $('doneIp').textContent = s.ip;
+        $('useCmd').textContent = `export NEBULADECK_HOST=${s.ip}`;
+        break;
+    }
+  }
+
+  function bars(rssi) {
+    const n = rssi > -55 ? 4 : rssi > -65 ? 3 : rssi > -75 ? 2 : 1;
+    const el = document.createElement('span');
+    el.className = 'bars';
+    el.title = `${rssi} dBm`;
+    for (let i = 0; i < 4; i++) {
+      const b = document.createElement('i');
+      b.style.height = `${4 + i * 3}px`;
+      if (i < n) b.className = 'on';
+      el.append(b);
+    }
+    return el;
+  }
+
+  function renderNets(list) {
+    const ul = $('nets');
+    ul.replaceChildren();
+    if (!list.length) {
+      const li = document.createElement('li');
+      li.className = 'dim';
+      li.style.padding = '12px 14px';
+      li.textContent = 'No networks found. Scan again, or use Other network.';
+      ul.append(li);
+    }
+    for (const [ssid, rssi, secure] of list) {
+      const li = document.createElement('li');
+      const b = document.createElement('button');
+      const name = document.createElement('span');
+      name.className = 'name';
+      name.textContent = ssid;
+      b.append(name);
+      if (secure) b.append(Object.assign(document.createElement('span'), { className: 'dim', textContent: '🔒' }));
+      b.append(bars(rssi));
+      b.onclick = () => choose(ssid, !!secure, b);
+      li.append(b);
+      ul.append(li);
+    }
+  }
+
+  function choose(ssid, secure, btn) {
+    chosen = ssid;
+    document.querySelectorAll('.nets button').forEach((x) => x.setAttribute('aria-selected', x === btn));
+    $('joinForm').hidden = false;
+    $('ssidRow').hidden = ssid !== null;
+    $('passRow').hidden = !secure;
+    $('ssidLabel').textContent = ssid ?? 'the network';
+    $('pass').value = '';
+    $('joinBtn').disabled = false;
+    (ssid === null ? $('ssid') : secure ? $('pass') : $('joinBtn')).focus();
+  }
+
+  $('rescan').onclick = () => send({ cmd: 'scan' });
+  $('other').onclick = () => choose(null, true, null);
+  $('joinForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const ssid = chosen ?? $('ssid').value.trim();
+    if (!ssid) return;
+    chosen = ssid;
+    $('joinBtn').disabled = true;
+    try {
+      await send({ cmd: 'join', ssid, pass: $('passRow').hidden ? '' : $('pass').value });
+    } catch (err) {
+      setStatus(err.message, 'err');
+      $('joinBtn').disabled = false;
+    }
+  };
 </script>
 </body>
 </html>

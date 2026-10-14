@@ -1,5 +1,6 @@
 #include "ui.h"
 #include <vector>
+#include "version.h"
 
 static const int W = 320, H = 480;
 
@@ -132,10 +133,17 @@ void Ui::drawIdle(uint32_t now) {
   int b = 150 + (int)(pulse * 105);
   fb_.setFont(&fonts::FreeSans12pt7b);
   fb_.setTextColor(fb_.color565(b, b, 255));
-  centerText(fb_, "Agent not connected", W / 2, H / 2);
+  centerText(fb_, net.online ? "Agent not connected" : "Connecting to WiFi", W / 2, H / 2);
   fb_.setFont(&fonts::FreeSans9pt7b);
   fb_.setTextColor(fb_.color565(120, 130, 180));
-  centerText(fb_, "waiting for host", W / 2, H / 2 + 30);
+  if (net.online) {
+    centerText(fb_, net.host, W / 2, H / 2 + 30);
+    centerText(fb_, net.ip, W / 2, H / 2 + 52);
+  } else {
+    centerText(fb_, net.ssid, W / 2, H / 2 + 30);
+    fb_.setTextColor(fb_.color565(90, 100, 150));
+    centerText(fb_, "Hold the screen to change network", W / 2, H - 40);
+  }
 }
 
 void Ui::drawPresence(uint32_t now) {
@@ -310,15 +318,201 @@ void Ui::drawAsk(uint32_t) {
   }
 }
 
+// Welcome screen: QR to the setup page, then BLE progress from the page.
+static const int QR_CARD = 212, QR_Y = 138;
+
+bool Ui::hitCancel(int px, int py) const {
+  return net.setup && net.canCancel && px > W / 2 - 80 && px < W / 2 + 80 && py > H - 44;
+}
+
+void Ui::drawSetup(uint32_t now) {
+  float t = now / 1000.0f;
+  nebulaHeader(fb_, nebula_, now);
+  fb_.setFont(&fonts::FreeSansBold18pt7b);
+  fb_.setTextColor(fb_.color565(240, 243, 255));
+  centerText(fb_, "Welcome", W / 2, 88);
+  fb_.setFont(&fonts::FreeSans9pt7b);
+  fb_.setTextColor(fb_.color565(150, 160, 210));
+  centerText(fb_, "Scan to connect me to WiFi", W / 2, 118);
+
+  // The QR only changes with the URL; render it once.
+  if (qrFor_ != net.url) {
+    qr_.setPsram(true);
+    qr_.setColorDepth(16);
+    if (qr_.width() || qr_.createSprite(QR_CARD - 16, QR_CARD - 16)) {
+      qr_.fillScreen(TFT_WHITE);
+      qr_.qrcode(net.url.c_str(), 0, 0, qr_.width(), 1, true);
+      qrFor_ = net.url;
+    }
+  }
+  int qx = (W - QR_CARD) / 2;
+  fb_.fillRoundRect(qx, QR_Y, QR_CARD, QR_CARD, 18, TFT_WHITE);
+  if (qr_.width()) qr_.pushSprite(&fb_, qx + 8, QR_Y + 8);
+  fb_.setTextColor(fb_.color565(110, 120, 170));
+  centerText(fb_, "jor3l.github.io/nebuladeck", W / 2, QR_Y + QR_CARD + 16);
+
+  float pulse = 0.5f + 0.5f * sinf(t * 3.0f);
+  uint16_t c = net.tone == T_OK ? fb_.color565(70, 220, 140)
+               : net.tone == T_ERR ? fb_.color565(255, 90, 100)
+               : net.tone == T_BUSY ? fb_.color565(60, 200, 255)
+                                    : fb_.color565(150, 160, 210);
+  fb_.setFont(&fonts::FreeSansBold12pt7b);
+  int tw = fb_.textWidth(net.status);
+  int sy = QR_Y + QR_CARD + 48;
+  int dx = (W - tw) / 2 - 12;
+  fb_.fillCircle(dx, sy, net.tone == T_BUSY ? 4 + (int)(pulse * 2) : 5, c);
+  fb_.setTextColor(fb_.color565(240, 243, 255));
+  centerText(fb_, net.status, W / 2 + 8, sy);
+  fb_.setFont(&fonts::FreeSans9pt7b);
+  fb_.setTextColor(c);
+  centerText(fb_, net.detail, W / 2, sy + 26);
+
+  if (net.canCancel) {
+    fb_.setTextColor(fb_.color565(120, 130, 180));
+    centerText(fb_, "Cancel", W / 2, H - 20);
+  }
+}
+
+// Long-press feedback on the nebula screens.
+void Ui::drawHold() {
+  int y = H - 70;
+  fb_.fillRoundRect(24, y - 26, W - 48, 64, 14, fb_.color565(20, 25, 52));
+  fb_.setFont(&fonts::FreeSans9pt7b);
+  fb_.setTextColor(fb_.color565(230, 235, 255));
+  centerText(fb_, "Keep holding to set up WiFi", W / 2, y - 6);
+  fb_.fillRoundRect(40, y + 14, W - 80, 6, 3, fb_.color565(36, 44, 88));
+  fb_.fillRoundRect(40, y + 14, (int)((W - 80) * min(hold, 1.0f)), 6, 3, fb_.color565(60, 200, 255));
+}
+
+// Update prompt: a bottom sheet with Update / Skip.
+static const int UP_TOP = H - 186, UP_BY = H - 74, UP_BH = 52;
+
+int Ui::hitUpdate(int px, int py) const {
+  if (py < UP_BY || py > UP_BY + UP_BH) return -1;
+  if (px >= 16 && px < W / 2 - 6) return 0;
+  if (px >= W / 2 + 6 && px < W - 16) return 1;
+  return -1;
+}
+
+void Ui::drawUpdatePrompt() {
+  fb_.fillRoundRect(0, UP_TOP, W, H - UP_TOP + 20, 22, fb_.color565(20, 25, 52));
+  fb_.fillRoundRect(W / 2 - 22, UP_TOP + 8, 44, 4, 2, fb_.color565(70, 80, 130));
+  fb_.setFont(&fonts::FreeSansBold12pt7b);
+  fb_.setTextColor(fb_.color565(240, 243, 255));
+  centerText(fb_, "Update available", W / 2, UP_TOP + 38);
+  fb_.setFont(&fonts::FreeSans9pt7b);
+  fb_.setTextColor(fb_.color565(150, 160, 210));
+  centerText(fb_, update, W / 2, UP_TOP + 64);
+  fb_.setTextColor(fb_.color565(110, 120, 170));
+  centerText(fb_, "installed: " FW_VERSION, W / 2, UP_TOP + 86);
+  int bw = W / 2 - 22;
+  fb_.fillRoundRect(16, UP_BY, bw, UP_BH, 14, fb_.color565(60, 200, 255));
+  fb_.fillRoundRect(W / 2 + 6, UP_BY, bw, UP_BH, 14, fb_.color565(36, 44, 88));
+  fb_.setFont(&fonts::FreeSansBold12pt7b);
+  fb_.setTextColor(fb_.color565(4, 12, 28));
+  centerText(fb_, "Update", 16 + bw / 2, UP_BY + UP_BH / 2);
+  fb_.setTextColor(fb_.color565(230, 235, 255));
+  centerText(fb_, "Skip", W / 2 + 6 + bw / 2, UP_BY + UP_BH / 2);
+}
+
+// Device info sheet, opened by tapping the logo.
+static const int IN_TOP = H - 304, IN_BY = H - 74, IN_BH = 52;
+
+int Ui::hitInfo(int px, int py) const {
+  if (py < IN_TOP) return -2;
+  if (py >= IN_BY && py <= IN_BY + IN_BH) {
+    if (px >= 16 && px < W / 2 - 6) return 0;
+    if (px >= W / 2 + 6 && px < W - 16) return 1;
+  }
+  return -1;
+}
+
+void Ui::drawInfo(uint32_t now) {
+  fb_.fillRectAlpha(0, 0, W, H, 150, fb_.color565(2, 3, 10));
+  fb_.fillRoundRect(0, IN_TOP, W, H - IN_TOP + 20, 22, fb_.color565(20, 25, 52));
+  fb_.fillRoundRect(W / 2 - 22, IN_TOP + 8, 44, 4, 2, fb_.color565(70, 80, 130));
+  fb_.setFont(&fonts::FreeSansBold12pt7b);
+  fb_.setTextColor(fb_.color565(240, 243, 255));
+  centerText(fb_, "NebulaDeck", W / 2, IN_TOP + 38);
+
+  bool local = !strcmp(FW_CHANNEL, "local");
+  String upd = updateCheck == UC_CHECKING ? "Checking..."
+               : update.length() ? update + " available"
+               : local ? "Off (local build)"
+               : updateCheck == UC_FAILED ? "Check failed"
+               : updateCheck == UC_CURRENT ? "Up to date"
+                                            : "Not checked yet";
+  const char* labels[] = {"Version", "Channel", "Network", "Address", "Updates"};
+  String values[] = {
+      FW_VERSION,
+      FW_CHANNEL,
+      net.online ? net.ssid + "  " + String(net.rssi) + " dBm" : net.ssid.length() ? "Joining " + net.ssid : "Not set up",
+      net.online ? net.ip + "  " + net.host : "-",
+      upd,
+  };
+  fb_.setFont(&fonts::FreeSans9pt7b);
+  for (int i = 0; i < 5; i++) {
+    int y = IN_TOP + 70 + i * 30;
+    fb_.setTextColor(fb_.color565(120, 130, 180));
+    fb_.setTextDatum(middle_left);
+    fb_.drawString(labels[i], 20, y);
+    fb_.setTextColor(fb_.color565(230, 235, 255));
+    fb_.setTextDatum(middle_right);
+    String v = values[i];
+    while (v.length() > 1 && fb_.textWidth(v) > W - 120) v.remove(v.length() - 1);
+    fb_.drawString(v, W - 20, y);
+    if (i < 4) fb_.drawFastHLine(20, y + 15, W - 40, fb_.color565(32, 38, 76));
+  }
+  fb_.setTextDatum(top_left);
+
+  int bw = W / 2 - 22;
+  bool busy = updateCheck == UC_CHECKING || local;
+  fb_.fillRoundRect(16, IN_BY, bw, IN_BH, 14, busy ? fb_.color565(36, 44, 88) : fb_.color565(60, 200, 255));
+  bool armed = forgetArmed && now - forgetArmed < 4000;
+  fb_.fillRoundRect(W / 2 + 6, IN_BY, bw, IN_BH, 14, armed ? fb_.color565(255, 90, 100) : fb_.color565(36, 44, 88));
+  fb_.setFont(&fonts::FreeSansBold9pt7b);
+  fb_.setTextColor(busy ? fb_.color565(120, 130, 180) : fb_.color565(4, 12, 28));
+  centerText(fb_, update.length() ? "Install update" : "Check updates", 16 + bw / 2, IN_BY + IN_BH / 2);
+  fb_.setTextColor(armed ? fb_.color565(20, 4, 8) : fb_.color565(255, 140, 150));
+  centerText(fb_, armed ? "Tap to confirm" : "Forget WiFi", W / 2 + 6 + bw / 2, IN_BY + IN_BH / 2);
+}
+
+void Ui::drawUpdating() {
+  fb_.fillScreen(fb_.color565(4, 5, 16));
+  fb_.setFont(&fonts::FreeSansBold9pt7b);
+  fb_.setTextColor(fb_.color565(150, 160, 210));
+  centerText(fb_, "N E B U L A D E C K", W / 2, 44);
+  fb_.setFont(&fonts::FreeSansBold12pt7b);
+  fb_.setTextColor(fb_.color565(240, 243, 255));
+  centerText(fb_, updateError.length() ? "Update failed" : "Updating to " + update, W / 2, H / 2 - 30);
+  fb_.setFont(&fonts::FreeSans9pt7b);
+  if (updateError.length()) {
+    fb_.setTextColor(fb_.color565(255, 90, 100));
+    fb_.setTextDatum(top_left);
+    wrapText(fb_, updateError, 30, H / 2, W - 60, 22, 3);
+  } else {
+    int bw = W - 80, pct = updatePct < 0 ? 0 : updatePct;
+    fb_.fillRoundRect(40, H / 2, bw, 8, 4, fb_.color565(36, 44, 88));
+    fb_.fillRoundRect(40, H / 2, bw * pct / 100, 8, 4, fb_.color565(60, 200, 255));
+    fb_.setTextColor(fb_.color565(150, 160, 210));
+    centerText(fb_, String(pct) + "%   keep it plugged in", W / 2, H / 2 + 36);
+  }
+  fb_.pushSprite(&lcd_, 0, 0);
+}
+
 void Ui::drawFrame(bool connected, uint32_t now) {
   for (int i = nmsg - 1; i >= 0; i--)
     if (msgs[i].ttl && now - msgs[i].at > msgs[i].ttl * 1000UL) nmsg = i;  // oldest expire first
-  if (!connected) drawIdle(now);
+  if (net.setup) drawSetup(now);
+  else if (!connected) drawIdle(now);
   else if (completed && !asking) drawDone(now);
   else if (status == ST_IDLE && !asking) drawPresence(now);
   else {
     drawStatus(now);
     if (asking) drawAsk(now);
   }
+  if (showingUpdate(connected)) drawUpdatePrompt();
+  if (showingInfo(connected)) drawInfo(now);
+  if (hold > 0) drawHold();
   fb_.pushSprite(&lcd_, 0, 0);
 }

@@ -13,7 +13,7 @@ class Display : public lgfx::LGFX_Device {
   Display() {
     {
       auto c = bus_.config();
-      c.freq_write = 20000000;
+      c.freq_write = 40000000;  // was 20 MHz; drop back if the image shows noise
       c.pin_wr = 47;
       c.pin_rd = -1;
       c.pin_rs = 0;
