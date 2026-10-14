@@ -194,6 +194,8 @@ void Api::info() {
   JsonDocument doc;
   doc["ok"] = true;
   doc["fw"] = FW_VERSION;
+  doc["board"] = FW_BOARD;
+  doc["channel"] = FW_CHANNEL;
   doc["name"] = ui_.net.bleName;
   doc["host"] = ui_.net.host;
   doc["ip"] = ui_.net.ip;

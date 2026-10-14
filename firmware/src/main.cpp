@@ -21,7 +21,7 @@ static const int BRIGHTNESS = 200;
 void setup() {
   Serial.begin(115200);
   lcd.init();
-  lcd.setRotation(2);  // portrait, 320x480, USB port at the bottom
+  lcd.setRotation(DISPLAY_ROTATION);  // portrait, 320x480 (see display.h)
   lcd.setBrightness(BRIGHTNESS);
   lcd.fillScreen(TFT_BLACK);
   if (!ui.begin()) {

@@ -8,7 +8,7 @@
 #include "version.h"
 
 static const char* RELEASES = "https://api.github.com/repos/jor3l/nebuladeck/releases/";
-static const char* ASSET = "nebuladeck-sc01plus-ota.bin";  // app only; the merged image is for USB
+static const char* ASSET = "nebuladeck-" FW_BOARD "-ota.bin";  // app only, for this board; the merged image is for USB
 static const uint32_t EVERY_MS = 12UL * 3600 * 1000;
 
 // stable: "v1.2.3" > "1.2.0"? dev: "dev-124-abc" > "dev-123-def"? (by CI run number)

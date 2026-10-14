@@ -4,7 +4,9 @@ Issues and PRs welcome. The project is small; keep changes focused.
 
 ## Layout
 
-- `firmware/` ESP32-S3 firmware (PlatformIO, Arduino, LovyanGFX, NimBLE). `make build`, `make flash`, `make monitor`.
+- `firmware/` firmware for the SC01 Plus (ESP32-S3) and SC01 (ESP32) (PlatformIO, Arduino, LovyanGFX, NimBLE).
+  `make build`, `make flash`, `make monitor`; add `BOARD=sc01` for the SC01. Board specifics live in
+  `src/display.h` and `platformio.ini`; CI builds both.
 - `skill/` agent skill (`SKILL.md`, curl only) and Claude Code hooks (`hooks.json`).
 - `site/` setup page: Bluetooth WiFi setup + web flasher (GitHub Pages).
 - `docs/PROTOCOL.md` HTTP API, BLE setup service and OTA rules. Update it with any change to either side.

@@ -1,7 +1,7 @@
 # Setup on macOS
 
 Gets the NebulaDeck screen on your WiFi and lets Claude Code use it.
-You need: the SC01 Plus, a USB-C cable, and Chrome or Edge (for flashing and Bluetooth setup).
+You need: an SC01 Plus or SC01, a USB data cable, and Chrome or Edge (for flashing and Bluetooth setup).
 PlatformIO (`pio`) only if you build the firmware yourself. Nothing gets installed for the agent
 except one skill file: it talks to the screen with `curl`.
 
@@ -12,12 +12,13 @@ choose **Flash device**, pick **Latest** (stable) or **Dev** (newest build of `m
 
 From source:
 
-1. Put the board in download mode: jumper **BOOT** to **GND** on the DEBUG header, press **RST**.
-2. `make flash`
-3. Remove the jumper and press **RST**.
+1. SC01 Plus: if flashing can't connect, put it in download mode: jumper **BOOT** to **GND** on the
+   DEBUG header, press **RST**. The SC01 needs nothing.
+2. `make flash` (SC01 Plus) or `make flash BOARD=sc01`
+3. If you used the jumper, remove it and press **RST**.
 
-`make flash` finds the board by its Espressif USB id (303A), so it never picks another
-serial device. Override with `make flash PORT=/dev/cu.usbmodemXXXX`. Local builds are channel
+`make flash` finds the board by its USB id (Espressif 303A for the SC01 Plus, CP210x or CH340 for
+the SC01), so it never picks another serial device. Override with `make flash PORT=/dev/cu.usbmodemXXXX`. Local builds are channel
 `local`: they never offer OTA updates.
 
 You only flash over USB once. Released firmware updates itself over WiFi: when a newer

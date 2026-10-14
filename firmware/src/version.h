@@ -5,6 +5,9 @@
 #ifndef FW_VERSION
 #define FW_VERSION "local"
 #endif
+#ifndef FW_BOARD
+#define FW_BOARD "sc01plus"  // set per board in platformio.ini
+#endif
 #ifndef FW_CHANNEL
 #define FW_CHANNEL "local"
 #endif

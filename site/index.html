@@ -96,7 +96,7 @@
 <main>
   <div class="eyebrow">N E B U L A D E C K</div>
   <h1>Set up your screen</h1>
-  <p class="lead">An always-on touch display for AI agents on the Panlee SC01 Plus. It lives on your WiFi; your agents talk to it over the local network.</p>
+  <p class="lead">An always-on touch display for AI agents on the Panlee SC01 Plus or SC01. It lives on your WiFi; your agents talk to it over the local network.</p>
 
   <div class="choices" role="group" aria-label="What do you want to do?">
     <button class="choice" id="pickWifi" aria-pressed="false">
@@ -165,13 +165,12 @@
     </div>
 
     <div class="card">
-      <h2>1 · Put the board in download mode</h2>
-      <ol>
-        <li>Unplug the board, then connect it with a USB-C <em>data</em> cable.</li>
-        <li>On the <strong>DEBUG</strong> header, jumper <code>BOOT</code> to <code>GND</code>.</li>
-        <li>Press <strong>RST</strong>. The screen may stay dark.</li>
-      </ol>
-      <p><small>If the board is already running NebulaDeck, the install may work without this. Try it first; if it can't connect, do the steps above.</small></p>
+      <h2>1 · Connect the board</h2>
+      <p>Plug the board in with a USB <em>data</em> cable. Both boards work with the same button below: it detects which one you have.</p>
+      <ul>
+        <li><strong>SC01</strong> (ESP32): nothing else to do, it switches to install mode by itself.</li>
+        <li><strong>SC01 Plus</strong> (ESP32-S3): usually works as is too. If the install can't connect, put it in download mode: on the <strong>DEBUG</strong> header jumper <code>BOOT</code> to <code>GND</code>, then press <strong>RST</strong> (the screen may stay dark).</li>
+      </ul>
     </div>
 
     <div class="card">
@@ -187,13 +186,13 @@
         <span slot="not-allowed"></span>
       </esp-web-install-button>
       <p class="patience"><strong>Be patient:</strong> installing takes a couple of minutes, and the <em>Erasing</em> step can sit still for a while before progress moves. That's normal. Keep this tab open and the cable connected until it says it's done.</p>
-      <p><small>Pick the <code>usbmodem</code> / <code>Espressif</code> port in the browser dialog. Installing replaces whatever is on the board.</small></p>
+      <p><small>In the browser dialog pick the board's port: <code>usbmodem</code> / <code>Espressif</code> for the SC01 Plus, <code>usbserial</code> / <code>CP210x</code> or <code>CH340</code> for the SC01. Installing replaces whatever is on the board.</small></p>
     </div>
 
     <div class="card">
       <h2>3 · Finish</h2>
       <ol>
-        <li>Remove the <code>BOOT</code> jumper and press <strong>RST</strong>. The screen shows a welcome QR code.</li>
+        <li>If you used the <code>BOOT</code> jumper, remove it and press <strong>RST</strong>. The screen shows a welcome QR code.</li>
         <li>Connect it to WiFi: <a href="#" id="toWifi">continue with Connect to WiFi</a>.</li>
       </ol>
     </div>

@@ -41,15 +41,13 @@ jobs:
           v="dev-${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}"
           echo "version=$v" >> "$GITHUB_OUTPUT"
           echo "PLATFORMIO_BUILD_FLAGS=-DFW_VERSION='\"$v\"' -DFW_CHANNEL='\"dev\"'" >> "$GITHUB_ENV"
-      - run: pio run -e sc01plus
+      - run: pio run -e sc01plus -e sc01
         working-directory: firmware
-      - run: ./scripts/merge-firmware.sh
+      - run: for b in sc01plus sc01; do ./scripts/merge-firmware.sh $b; done
       - uses: actions/upload-artifact@v4
         with:
           name: nebuladeck-sc01plus
-          path: |
-            dist/nebuladeck-sc01plus.bin
-            dist/nebuladeck-sc01plus-ota.bin
+          path: dist/*.bin
 
   dev-release:
     needs: build

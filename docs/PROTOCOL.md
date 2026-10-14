@@ -97,7 +97,8 @@ Builds carry a channel (`FW_CHANNEL`) and version (`FW_VERSION`), set by CI:
 The device checks shortly after joining WiFi and then every 12 h, over HTTPS verified against the
 roots in `firmware/src/roots.h`. If a newer build exists, it offers **Update** / **Skip** on the
 nebula screens. **Skip** hides that version for good. **Update** (or `POST /api/update`) downloads the
-release asset `nebuladeck-sc01plus-ota.bin` (app only) into the spare OTA slot and reboots.
+release asset for its board, `nebuladeck-sc01plus-ota.bin` or `nebuladeck-sc01-ota.bin` (app only), into the
+spare OTA slot and reboots. `GET /api/info` reports `board` and `channel`.
 
 ## Hooks
 

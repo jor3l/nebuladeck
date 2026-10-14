@@ -1,7 +1,7 @@
 # NebulaDeck
 
 A small always-on touch screen on your desk that shows what your AI agents are doing, built on
-the **Panlee SC01 Plus** (ESP32-S3, 3.5" 320×480 capacitive touch, standing upright).
+the **Panlee SC01 Plus** or the original **SC01** (3.5" 320×480 capacitive touch, standing upright).
 
 ## Why
 
@@ -21,7 +21,7 @@ and miss the moment they need you. NebulaDeck is the glanceable middle ground:
 ```
  Agents on your computer                         NebulaDeck (on your WiFi)
  ┌───────────────────────────┐   HTTP on your    ┌──────────────────────────┐
- │ Your coding agent +       │   local network   │ ESP32-S3 + touch screen  │
+ │ Your coding agent +       │   local network   │ ESP32 + touch screen     │
  │ a few lines of rules      │                   │                          │
  │   └─ curl ────────────────┼──────────────────▶│ http://nebuladeck.local  │
  │                           │◀──────────────────┤ taps on ask buttons      │
@@ -72,9 +72,21 @@ telemetry.
 
 ## Hardware
 
-- **Panlee / Wireless-Tag SC01 Plus** (ESP32-S3, 3.5" 320×480 capacitive touch, ST7796 + FT6336). Also sold as WT32-SC01 Plus.
+Either board works; the web flasher detects which one you plug in.
+
+| | **SC01 Plus** (WT32-SC01 Plus) | **SC01** (WT32-SC01) |
+|---|---|---|
+| Chip | ESP32-S3, 16 MB flash, 8 MB PSRAM | ESP32-WROVER-B, 4 MB flash (some 16 MB), PSRAM |
+| Display | 3.5" 320×480 ST7796, 8-bit parallel | 3.5" 320×480 ST7796S, SPI |
+| Touch | FT6336 capacitive | FT6336 capacitive |
+| USB | native USB-C | USB-serial bridge |
+| Build | `sc01plus` (default) | `sc01` (`make flash BOARD=sc01`) |
+
+The SC01 build runs on the same code but hasn't been tested on a real board yet; the SPI screen
+also draws more slowly than the Plus's parallel one.
+
 - A USB-C cable. After flashing, USB only provides power; data goes over WiFi.
-- To flash over USB the first time, jumper **BOOT** to **GND** on the DEBUG header and press **RST**
+- To flash an SC01 Plus over USB, it may need download mode: jumper **BOOT** to **GND** on the DEBUG header and press **RST**
   (download mode), then remove the jumper and press RST again. Later updates go over WiFi.
 
 ## Quick start

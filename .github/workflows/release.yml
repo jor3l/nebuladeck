@@ -29,9 +29,9 @@ jobs:
           path: ~/.platformio
           key: pio-${{ hashFiles('firmware/platformio.ini') }}
       - run: pip install platformio esptool
-      - run: pio run -e sc01plus
+      - run: pio run -e sc01plus -e sc01
         working-directory: firmware
-      - run: ./scripts/merge-firmware.sh
+      - run: for b in sc01plus sc01; do ./scripts/merge-firmware.sh $b; done
       - name: Publish v${{ inputs.version }} as latest
         env:
           GH_TOKEN: ${{ github.token }}

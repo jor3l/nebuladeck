@@ -1,6 +1,7 @@
 # firmware
 
-ESP32-S3 firmware for the SC01 Plus (PlatformIO, Arduino, LovyanGFX, NimBLE).
+Firmware for the SC01 Plus (ESP32-S3, env `sc01plus`) and SC01 (ESP32, env `sc01`)
+(PlatformIO, Arduino, LovyanGFX, NimBLE). `display.h` holds each board's display setup.
 
 - `main.cpp` loop: touch, frame pacing
 - `ui.*` screens (welcome/QR, idle, presence, status, ask, done, update) drawn into one PSRAM framebuffer
