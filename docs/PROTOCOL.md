@@ -41,7 +41,8 @@ on `bye`; with all 8 slots taken, the least recently seen one is replaced.
 
 With one agent the screens are the single-agent ones below. With two or more, the nebula shows
 one card per agent (logo, name and project, what it is doing, its latest activity, progress);
-the list scrolls when it doesn't fit. A question or "needs you" turns that agent's card amber
+the list scrolls when it doesn't fit. Cards needing you come first, then busy agents, then the rest; a card's label reads QUESTION,
+NEEDS YOU, DONE, WORKING (a task), ACTIVE (busy from hooks) or READY. A question or "needs you" turns that agent's card amber
 instead of taking over the screen; tapping a card opens that agent's screens, and "All agents"
 returns to the list. `GET /api/info` lists the agents.
 
@@ -65,7 +66,7 @@ the screen returns to the idle nebula ("Agent not connected"), and a new session
 | `POST /api/ping` | | Keep the session alive |
 | `POST /api/hook?event=E&tool=T&kind=K&project=P&agent=A` | none | Claude Code hook event, mapped to `presence`/`bye` on the device (see Hooks) |
 | `POST /api/bye` | | End the session: back to the nebula now |
-| `GET /api/info` | | `fw`, `name`, `host`, `ip`, `ssid`, `rssi`, `w`, `h`, `session`, `update?` |
+| `GET /api/info` | | `fw`, `name`, `host`, `ip`, `ssid`, `rssi`, `w`, `h`, `session`, `update?`, `agents` (in card order: `agent`, `project`, `label`, `line`, `status`, `asking`, `attn`, `completed`, `activity`, `last`), `max_agents`, and diagnostics: `uptime_s`, `heap`, `wifi_sleep`, `wifi_drops`, `silent_clients`, `requests`, `frame_ms`, `frame_max_ms`, `log` |
 | `POST /api/update` | | Install the newer release in `update` (409 if none). The device shows progress and reboots |
 | `POST /api/wifi/forget` | | Erase the saved network and show the setup QR |
 

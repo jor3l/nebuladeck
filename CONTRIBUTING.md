@@ -18,7 +18,8 @@ Every bug fixed here gets a test, so it stays fixed.
   device on localhost; `tests/test_page.py` drives the setup page in headless Chrome with a fake
   NebulaDeck behind Web Bluetooth. CI runs both before any Pages deploy.
 - `make e2e`: `tests/test_device.py` against your real device (`NEBULADECK_HOST`, default
-  `nebuladeck.local`). It uses its own `E2E-*` agents and cleans up. Run it after flashing.
+  `nebuladeck.local`). It uses its own `E2E-*` agents and cleans up. Run it after flashing; give the
+  device ~30 s to settle on the network first. It skips when too few agent slots are free.
 
 Python standard library only (plus `curl` and Chrome). On macOS the device tests go through `curl`,
 since Local Network privacy can block Python's own sockets.

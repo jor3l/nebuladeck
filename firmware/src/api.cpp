@@ -133,6 +133,7 @@ void Api::begin() {
   // Claude Code hooks: POST /api/hook?event=<hook_event_name>&tool=&kind=&project=&agent=.
   // The event body is never needed (it can hold whole files), so hooks send none.
   server.on("/api/hook", HTTP_POST, [this] {
+    requests_++;
     String ev = server.arg("event");
     JsonDocument in, out;
     const char* t = "presence";
@@ -165,7 +166,12 @@ void Api::begin() {
 }
 
 void Api::poll(uint32_t now) {
-  server.handleClient();
+  // Frames take 60-100 ms, so one handleClient() per loop made each request wait ~3 frames
+  // (accept, read, answer). Run a few passes, so a request usually completes in one turn.
+  for (int i = 0; i < 6; i++) {
+    server.handleClient();
+    if (!server.client()) break;
+  }
   for (Agent& a : ui_.agents) {
     if (!a.used) continue;
     // Signed: requests handled inside poll(now) stamp lastSeen with a slightly later
@@ -192,15 +198,24 @@ void Api::info() {
   doc["max_agents"] = Ui::MAXAGENTS;
   doc["uptime_s"] = millis() / 1000;
   doc["heap"] = ESP.getFreeHeap();
+  doc["wifi_sleep"] = WiFi.getSleep();  // modem power save: true adds latency
+  doc["silent_clients"] = silentClients;  // connections that never sent a request
+  doc["requests"] = requests_;
+  doc["wifi_drops"] = ui_.net.drops;
+  doc["frame_ms"] = ui_.frameMs;
+  doc["frame_max_ms"] = ui_.frameMaxMs;
   JsonArray lg = doc["log"].to<JsonArray>();
   for (int i = 0; i < LOGN; i++) {
     const String& e = log_[(logNext_ + i) % LOGN];
     if (e.length()) lg.add(e);
   }
+  // In card order (needs you first), with each card's label.
   JsonArray list = doc["agents"].to<JsonArray>();
-  for (const Agent& a : ui_.agents) {
-    if (!a.used) continue;
+  int idx[Ui::MAXAGENTS], n = ui_.cardOrder(idx);
+  for (int k = 0; k < n; k++) {
+    const Agent& a = ui_.agents[idx[k]];
     JsonObject o = list.add<JsonObject>();
+    o["label"] = Ui::cardLabel(a);
     o["agent"] = a.name;
     o["project"] = a.project;
     o["line"] = a.line();
@@ -235,6 +250,7 @@ void Api::askStatus() {
 
 // POST /api/<t> with a JSON body (may be empty).
 void Api::route() {
+  requests_++;
   String uri = server.uri();
   if (server.method() != HTTP_POST || !uri.startsWith("/api/")) return sendError(404, "not found");
   String body = server.arg("plain");

@@ -15,6 +15,7 @@ struct NetInfo {
   bool canCancel = false;  // setup can go back to a saved network
   String ssid, ip, host, bleName, url;
   int rssi = 0;
+  uint32_t drops = 0;  // times the WiFi connection was lost (auto-reconnect brings it back)
   String status, detail;   // setup screen lines
   uint8_t tone = T_IDLE;
 };
@@ -85,6 +86,7 @@ class Ui {
   bool anyNeedsYou() const;
   NetInfo net;
   float hold = 0;  // long-press progress towards WiFi setup, 0-1
+  uint32_t frameMs = 0, frameMaxMs = 0;  // last and slowest frame render time (debug, /api/info)
   // Firmware update: newer release tag, on-screen prompt, install progress.
   String update, updateError;
   bool updatePrompt = false;
@@ -99,6 +101,9 @@ class Ui {
   bool begin();
   // Card list (2+ agents): the card at a point (index into agents[]), or -1; scroll bounds.
   int hitCard(int x, int y) const;
+  // Card order: needs you first, then busy agents, then the rest. Returns how many.
+  int cardOrder(int* idx) const;
+  static const char* cardLabel(const Agent& a);  // QUESTION, NEEDS YOU, DONE, WORKING, ACTIVE, READY...
   int maxScroll() const;
   // "‹ All agents" on an opened agent's screens.
   bool hitBack(int x, int y) const { return count() > 1 && focus >= 0 && x > W_ - 140 && y < 44; }

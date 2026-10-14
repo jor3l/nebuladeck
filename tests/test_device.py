@@ -14,20 +14,27 @@ HOST = os.environ.get("NEBULADECK_HOST", "nebuladeck.local")
 AGENTS = ["E2E-A", "E2E-B", "E2E-C"]
 
 
+ADDR = None  # the device's own IP once known: one name lookup, not one per request
+
+
 def base():
-    return "http://%s/api" % HOST
+    return "http://%s/api" % (ADDR or HOST)
 
 
 def curl(url, method="GET", data=None, headers=()):
     """Returns (status, body text, response headers lowercased)."""
-    cmd = ["curl", "-4", "-s", "-m", "5", "-X", method, "-D", "-", url]
+    # 10 s: WiFi occasionally drops a packet and TCP resends after 1-3 s; that isn't a device bug.
+    cmd = ["curl", "-4", "-s", "-m", "10", "-X", method, "-D", "-", url]
     for h in headers:
         cmd += ["-H", h]
     if data is not None:
         cmd += ["--data-binary", data]
     r = subprocess.run(cmd, capture_output=True)  # bytes: text mode would turn \r\n into \n
-    if r.returncode:
-        raise OSError("curl exit %d" % r.returncode)
+    # Refused / empty reply: the device never got the request. Reset: harmless to repeat a GET.
+    if r.returncode in (7, 52) or (r.returncode == 56 and method == "GET"):
+        r = subprocess.run(cmd, capture_output=True)
+    if r.returncode:  # 6 = name lookup failed, 7 = refused, 28 = timed out
+        raise OSError("curl exit %d for %s %s" % (r.returncode, method, url))
     head, _, body = r.stdout.decode().partition("\r\n\r\n")
     lines = head.split("\r\n")
     hdrs = {l.split(":", 1)[0].lower(): l.split(":", 1)[1].strip() for l in lines[1:] if ":" in l}
@@ -62,6 +69,9 @@ class Device(unittest.TestCase):
         except OSError as e:
             raise unittest.SkipTest("no device at %s (%s)" % (HOST, e))
         print("device: NebulaDeck %s at %s" % (info["fw"], info["ip"]), file=sys.stderr)
+        global ADDR
+        if ":" not in HOST:
+            ADDR = info["ip"]
         cls.tearDownClass()
         # The device replaces its least recently active agent when every slot is taken; with
         # too few free slots that could be one of ours mid-test. Don't evict real sessions.
@@ -179,6 +189,24 @@ class Device(unittest.TestCase):
         ag = agents()
         self.assertNotIn("E2E-A", ag)
         self.assertIn("E2E-B", ag)
+
+    def test_cards_needing_you_come_first(self):
+        post("presence", {"agent": "E2E-A", "project": "e2e", "text": "Ready"})
+        post("presence", {"agent": "E2E-B", "project": "e2e", "text": "Running a command..."})
+        post("ask", {"agent": "E2E-C", "project": "e2e", "id": "e2e-qc", "prompt": "Q", "options": ["1"], "timeout": 30})
+        order = [a["agent"] for a in call("/info")[1]["agents"] if a["project"] == "e2e"]
+        self.assertEqual(order, ["E2E-C", "E2E-B", "E2E-A"])  # question, then busy, then idle
+
+    def test_card_labels_for_hook_only_agents(self):
+        # Regression: an agent running a command (status line from hooks, no task) showed IDLE.
+        hook("PreToolUse", agent="E2E-A", project="e2e", tool="Bash")
+        self.assertEqual(agents()["E2E-A"]["label"], "ACTIVE")
+        hook("Stop", agent="E2E-A", project="e2e")
+        self.assertEqual(agents()["E2E-A"]["label"], "READY")
+        hook("Notification", agent="E2E-A", project="e2e")
+        self.assertEqual(agents()["E2E-A"]["label"], "NEEDS YOU")
+        post("state", {"agent": "E2E-B", "project": "e2e", "status": "working", "title": "T"})
+        self.assertEqual(agents()["E2E-B"]["label"], "WORKING")
 
     def test_done(self):
         post("state", {"agent": "E2E-B", "project": "e2e", "status": "working", "title": "B"})

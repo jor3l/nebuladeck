@@ -690,13 +690,35 @@ int Ui::maxScroll() const {
   return max(0, n * (CARD_H + CARD_GAP) - CARD_GAP - (H - LIST_Y - 8));
 }
 
+// Busy: a task running, or a hook status line still in progress ("Running a command...").
+static bool busy(const Agent& a) {
+  return !a.completed && (a.status != ST_IDLE || a.presence.endsWith("..."));
+}
+
+// Hook-only agents have no task status: their status line says whether they're busy.
+const char* Ui::cardLabel(const Agent& a) {
+  return a.asking ? "QUESTION" : a.attn ? "NEEDS YOU" : a.completed ? "DONE"
+         : a.status != ST_IDLE ? statusLabel(a.status) : busy(a) ? "ACTIVE" : "READY";
+}
+
+int Ui::cardOrder(int* idx) const {
+  int n = 0;
+  for (int pass = 0; pass < 3; pass++)
+    for (int i = 0; i < MAXAGENTS; i++) {
+      const Agent& a = agents[i];
+      if (!a.used) continue;
+      int rank = a.needsYou() ? 0 : busy(a) ? 1 : 2;
+      if (rank == pass) idx[n++] = i;
+    }
+  return n;
+}
+
 int Ui::hitCard(int px, int py) const {
   if (py < LIST_Y) return -1;
-  int k = 0;
-  for (int i = 0; i < MAXAGENTS; i++) {
-    if (!agents[i].used) continue;
-    int y = LIST_Y + k++ * (CARD_H + CARD_GAP) - scroll;
-    if (py >= y && py < y + CARD_H && px >= 12 && px < W - 12) return i;
+  int idx[MAXAGENTS], n = cardOrder(idx);
+  for (int k = 0; k < n; k++) {
+    int y = LIST_Y + k * (CARD_H + CARD_GAP) - scroll;
+    if (py >= y && py < y + CARD_H && px >= 12 && px < W - 12) return idx[k];
   }
   return -1;
 }
@@ -711,11 +733,10 @@ void Ui::drawAgents(uint32_t now) {
   scroll = max(0, min(scroll, maxScroll()));
 
   fb_.setClipRect(0, LIST_Y - 2, W, H - LIST_Y + 2);
-  int k = 0;
-  for (int i = 0; i < MAXAGENTS; i++) {
-    const Agent& a = agents[i];
-    if (!a.used) continue;
-    int x = 12, w = W - 24, y = LIST_Y + k++ * (CARD_H + CARD_GAP) - scroll;
+  int idx[MAXAGENTS], nc = cardOrder(idx);
+  for (int k = 0; k < nc; k++) {
+    const Agent& a = agents[idx[k]];
+    int x = 12, w = W - 24, y = LIST_Y + k * (CARD_H + CARD_GAP) - scroll;
     if (y > H || y + CARD_H < LIST_Y) continue;
     bool hot = a.needsYou();
     float pulse = 0.5f + 0.5f * sinf(t * 4.5f);
@@ -729,8 +750,10 @@ void Ui::drawAgents(uint32_t now) {
     // Logo (or a dot), name and project, status on the right.
     if (const AgentIcon* ic = iconFor(a.name)) drawMask(fb_, ic->small, ICON_SMALL, x + 24, y + 24, ic->r, ic->g, ic->b);
     else fb_.fillCircle(x + 24, y + 24, 6, fb_.color565(PURPLE_R, PURPLE_G, PURPLE_B));
-    const char* label = a.asking ? "QUESTION" : a.attn ? "NEEDS YOU" : a.completed ? "DONE" : statusLabel(a.status);
-    uint16_t lc = hot ? fb_.color565(255, 200, 90) : a.completed ? fb_.color565(70, 220, 140) : statusColor(fb_, a.status);
+    bool active = a.status == ST_IDLE && busy(a);
+    const char* label = cardLabel(a);
+    uint16_t lc = hot ? fb_.color565(255, 200, 90) : a.completed ? fb_.color565(70, 220, 140)
+                  : active ? statusColor(fb_, ST_WORKING) : statusColor(fb_, a.status);
     fb_.setFont(&fonts::FreeSansBold9pt7b);
     int lw = fb_.textWidth(label);
     fb_.setTextColor(lc);

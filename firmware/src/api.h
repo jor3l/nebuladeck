@@ -31,6 +31,7 @@ class Api {
   String log_[LOGN];
   int logNext_ = 0;
   void note(const String& s);
+  uint32_t requests_ = 0;
 
   Ui& ui_;
 };

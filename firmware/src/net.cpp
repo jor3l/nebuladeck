@@ -95,7 +95,7 @@ void Net::poll(uint32_t now) {
     bool up = WiFi.isConnected();
     if (up) info_.rssi = WiFi.RSSI();
     if (up && (!info_.online || info_.ip != WiFi.localIP().toString())) online();
-    else if (!up && info_.online) info_.online = false;  // auto-reconnect is on
+    else if (!up && info_.online) { info_.online = false; info_.drops++; Serial.println("wifi: lost"); }  // auto-reconnect is on
     return;
   }
 

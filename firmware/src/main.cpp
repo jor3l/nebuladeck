@@ -175,6 +175,9 @@ void loop() {
   static uint32_t lastFrame = 0;
   if (now - lastFrame >= 30) {
     lastFrame = now;
+    uint32_t t0 = millis();
     ui.drawFrame(conn, now);
+    ui.frameMs = millis() - t0;
+    if (ui.frameMs > ui.frameMaxMs) ui.frameMaxMs = ui.frameMs;
   }
 }
