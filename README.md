@@ -6,7 +6,7 @@
 A small always-on touch screen on your desk that shows what your AI agents are doing, built on
 the **Panlee SC01 Plus** or the original **SC01** (3.5" 320×480 capacitive touch, standing upright).
 
-<p align="center"><img src="print/steps/4.jpg" alt="An assembled NebulaDeck on a desk" width="520"></p>
+<p align="center"><img src="demo.jpg" alt="In use nebuladeck" width="520"></p>
 
 New here? [Build one](#build-your-nebuladeck), follow the [quick start](#quick-start), then read the
 [user manual](docs/MANUAL.md) for everything the screen can do.
